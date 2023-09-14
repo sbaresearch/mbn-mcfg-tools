@@ -1,32 +1,151 @@
 import hashlib
 import logging
+import os
+import json
+
+from pathlib import Path
+from typing import Optional
 
 from elftools.elf.elffile import ELFFile
 from elftools.elf.segments import Segment
-from mbntools.mcfg import MCFG
+from mbntools.mcfg import MCFG, MCFG_Item
 from mbntools.utils import write_all, get_bytes, pack
+from mbntools import utils
+from mbntools.mbn_json import MbnJsonEncoder, decode_hook
 
 logger = logging.getLogger(__name__)
 
 class Mbn:
     def __init__(self, stream):
-        self.stream = stream
-        self.values = {}
+        self._stream = stream
+        self._values = {}
+        self.parse()
 
     def parse(self):
-        self["elf"] = ELFFile(self.stream)
-        self.stream.seek(self["elf"].get_segment(2)["p_offset"])
-        self["mcfg"] = MCFG(self.stream)
-        self["mcfg"].parse()
+        self["elf"] = ELFFile(self._stream)
+        self._stream.seek(self.get_mcfg_seg()["p_offset"])
+        self["mcfg"] = MCFG(self._stream)
         self._parse_mcfg_end()
 
+    def extract(self, path):
+        nv_items = []
+        path = Path(path)
+        files_path = utils.join(Path(path), Path("files"))
+        for item in self["mcfg"]["items"]:
+            if item["type"] == MCFG_Item.NV_TYPE:
+                i = item._header.copy()
+                i["ascii"] = i["data"].decode("ascii", errors="replace").replace('\ufffd', '.')
+                i["data"] = i["data"].hex(' ', -2)
+                nv_items.append(i)
+                continue
+
+            p = utils.join(files_path, Path(item["filename"].decode().strip('\x00')))
+            p.resolve()
+
+            if files_path not in p.parents:
+                logger.warn(f"File would escape extract dir (skipping): {p}")
+                continue
+
+            p.parent.mkdir(parents=True, exist_ok=True)
+            with open(p, "xb") as f:
+                write_all(f, item["data"])
+
+        with open(path / "nv_items", "x") as f:
+            json.dump(nv_items, f)
+        with open(path / "meta", "x") as f:
+            write_all(f, MbnJsonEncoder(partial=True).encode(self["mcfg"]))
+        with open(path / "original_file.mbn", "xb") as f:
+            self._stream.seek(0)
+            buf = self._stream.read() # TODO: avoid reading everything at once
+            write_all(f, buf)
+        with open(path / "mcfg_end", "xb") as f:
+            write_all(f, self["mcfg_end"])
+
+    # TODO: prevent overwriting
+    @staticmethod
+    def unextract(exdir, path, use_defaults=True) -> "Mbn":
+        def create_default_item(fname: Optional[bytes] = None):
+            item = MCFG_Item.__new__(MCFG_Item)
+            item._header = {
+                    "type": MCFG_Item.NV_TYPE, # TODO: find suitable default
+                    "attributes": 0,
+                    "reserved": 0,
+                    }
+            if fname is not None:
+                item["filename"] = fname
+                item["type"] = MCFG_Item.FILE_TYPE
+
+            return item
+
+        exdir = Path(exdir)
+
+        if not all(map(lambda n: (exdir / n).exists(), ["nv_items", "meta", "original_file.mbn", "files"])):
+            raise Exception("Extracted file is incomplete!")
+
+        with open(exdir / "meta", "r") as f:
+            mcfg = json.load(f, object_hook=decode_hook)
+
+        with open(exdir / "nv_items", "r") as f:
+            nv_items = json.load(f)
+
+        with open(exdir / "mcfg_end", "rb") as f:
+            mcfg_end = f.read()
+
+        mcfg_nv_items = []
+        for nv_item in nv_items:
+            item = MCFG_Item.__new__(MCFG_Item)
+            item._header = nv_item
+            del item._header["ascii"]
+            item["data"] = bytes.fromhex(item["data"])
+            mcfg_nv_items.append(item)
+
+        for dirp, _, fps in os.walk(exdir / "files"): # TODO use onerror
+            for fp in fps:
+                fp = Path(dirp) / fp
+
+                name = fp.relative_to(exdir / "files")
+                i = mcfg.find_filepath(str("/" / name).encode())
+                if i is None:
+                    if use_defaults:
+                        item = create_default_item(str("/" / fp.relative_to(exdir / "files")).encode() + b'\x00')
+                        mcfg["items"].append(item)
+                        i = len(mcfg["items"]) - 1
+                    else:
+                        raise NotImplementedError
+
+                with open(fp, "rb") as f:
+                    mcfg["items"][i]["data"] = f.read()
+
+        mcfg["items"] = list(filter(lambda x: "data" in x, mcfg["items"]))
+        mcfg["items"] = mcfg_nv_items + mcfg["items"]
+
+        stream = open(path, "w+b") # TODO
+        with open(exdir / "original_file.mbn", "rb") as orig:
+            write_all(stream, orig.read())
+        stream.seek(0)
+        mbn = Mbn.__new__(Mbn)
+        mbn._stream = stream # TODO: set stream for subcomponents
+        mbn._values = {
+                "elf": ELFFile(stream),
+                "mcfg": mcfg,
+                "mcfg_end": mcfg_end,
+                }
+        mbn["mcfg"]._stream = stream
+        for i in mbn["mcfg"]["items"]:
+            i._stream = stream
+        mbn["mcfg"]["trailer"]._stream = stream
+        return mbn
+
+    def get_mcfg_seg(self) -> Segment:
+        return self["elf"].get_segment(2)
+
     def _parse_mcfg_end(self):
-        offset = self.stream.tell()
+        offset = self._stream.tell()
 
         *_, last_seg = self["elf"].iter_segments()
         mcfg_end = last_seg["p_offset"] + last_seg["p_filesz"]
 
-        logger.debug(f"Posiiton before calc. diff. {self.stream.tell()}")
+        logger.debug(f"Posiiton before calc. diff. {self._stream.tell()}")
         diff = mcfg_end - offset
 
         self["mcfg_end"] = b""
@@ -35,21 +154,21 @@ class Mbn:
         elif diff < 0:
             logger.warn("MCFG parser read past MCFG segment end.")
         else:
-            self.stream.seek(offset)
-            self["mcfg_end"] = get_bytes(self.stream, diff)
+            self._stream.seek(offset)
+            self["mcfg_end"] = get_bytes(self._stream, diff)
 
     def rewrite_hashes(self):
         n, hseg = self._get_hash_segment()
 
         for i, s in enumerate(self["elf"].iter_segments()):
             if i == n:
-                self.stream.seek(hseg["p_offset"] + 40 + i * 32)
-                write_all(self.stream, b'\x00' * 32)
+                self._stream.seek(hseg["p_offset"] + 40 + i * 32)
+                write_all(self._stream, b'\x00' * 32)
                 continue
 
             h = hashlib.sha256(s.data())
-            self.stream.seek(hseg["p_offset"] + 40 + i * 32)
-            write_all(self.stream, h.digest())
+            self._stream.seek(hseg["p_offset"] + 40 + i * 32)
+            write_all(self._stream, h.digest())
 
     def check_hashes(self) -> bool:
         n, hseg = self._get_hash_segment()
@@ -88,11 +207,12 @@ class Mbn:
         if self["elf"].num_segments() != 3:
             raise NotImplementedError
 
-        self.stream.seek(self["elf"].get_segment(2)["p_offset"])
-        start = self.stream.tell()
+        self._stream.seek(self["elf"].get_segment(2)["p_offset"])
+        start = self._stream.tell()
         self["mcfg"].write()
-        write_all(self.stream, self["mcfg_end"])
-        stop = self.stream.tell()
+        write_all(self._stream, self["mcfg_end"])
+        self._stream.truncate()
+        stop = self._stream.tell()
         size = stop - start
 
         filesz_off = self["elf"]["e_phoff"] + 2 * self["elf"]["e_phentsize"]
@@ -105,12 +225,15 @@ class Mbn:
         else:
             raise Exception("Unknown elf class")
 
-        self.stream.seek(filesz_off)
+        self._stream.seek(filesz_off)
         endianness = "<" if self["elf"].little_endian else ">"
-        pack(endianness + sizefmt, self.stream, size)
+        pack(endianness + 2 * sizefmt, self._stream, size, size)
 
     def __getitem__(self, k):
-        return self.values[k]
+        return self._values[k]
 
     def __setitem__(self, k, v):
-        self.values[k] = v
+        self._values[k] = v
+
+    def __contains__(self, k):
+        return k in self._values

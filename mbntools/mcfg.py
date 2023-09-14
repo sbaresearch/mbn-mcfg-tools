@@ -14,24 +14,25 @@ class MCFG_Item:
     FILE_TYPE = 4
 
     def __init__(self, stream):
-        self._offset = None
-        self.stream = stream
-        self.header = {}
+        self._offset = stream.tell()
+        self._stream = stream
+        self._header = {}
+        self.parse()
 
-    def offset(self) -> Optional[int]:
+    def offset(self) -> int:
         return self._offset
 
     def parse(self):
-        self._offset = self.stream.tell()
+        self._offset = self._stream.tell()
         self.parse_header()
         self.parse_content()
 
     def parse_header(self):
-        self["length"], \
+        self._length, \
         self["type"], \
         self["attributes"], \
         self["reserved"] \
-        = unpack("<IBBH", self.stream)
+        = unpack("<IBBH", self._stream)
 
     def parse_content(self):
         if self["type"] == self.NV_TYPE:
@@ -44,43 +45,43 @@ class MCFG_Item:
     def parse_nv(self):
         self["nv_id"], \
         clen \
-        = unpack("<HH", self.stream)
+        = unpack("<HH", self._stream)
 
-        if (clen + 4 + 8) != self["length"]:
+        if (clen + 4 + 8) != self._length:
             raise Exception("Mismatching item and data lengths in nv entry")
 
-        self["data"] = get_bytes(self.stream, clen)
+        self["data"] = get_bytes(self._stream, clen)
 
         if len(self["data"]) > 0:
             self["data_magic"] = self["data"][0]
 
     def parse_file(self):
-        magic, = unpack("<H", self.stream)
+        magic, = unpack("<H", self._stream)
 
         if magic != 1:
             logger.warn(f"Invalid magic value in item file header: {magic} should be 1")
 
-        fnamelen, = unpack("<H", self.stream)
-        self["filename"] = get_bytes(self.stream, fnamelen)
-        fsmagic, = unpack("<H", self.stream)
+        fnamelen, = unpack("<H", self._stream)
+        self["filename"] = get_bytes(self._stream, fnamelen)
+        fsmagic, = unpack("<H", self._stream)
 
         if fsmagic != 2:
             raise Exception("Invalid file size magic value")
 
-        clen, = unpack("<H", self.stream)
+        clen, = unpack("<H", self._stream)
 
-        if (clen + 8 + fnamelen + 8) != self["length"]:
+        if (clen + 8 + fnamelen + 8) != self._length:
             raise Exception("Mismatching item and data length in file entry")
 
-        self["data"] = get_bytes(self.stream, clen)
+        self["data"] = get_bytes(self._stream, clen)
 
         if len(self["data"]) > 0:
             self["data_magic"] = self["data"][0]
 
     def write(self):
-        self._offset = self.stream.tell()
-        self.stream.seek(4, os.SEEK_CUR)
-        pack("<BBH", self.stream,
+        self._offset = self._stream.tell()
+        self._stream.seek(4, os.SEEK_CUR)
+        pack("<BBH", self._stream,
              self["type"],
              self["attributes"],
              self["reserved"],
@@ -91,11 +92,11 @@ class MCFG_Item:
         elif self["type"] == self.NVFILE_TYPE or self["type"] == self.FILE_TYPE:
             self._write_file()
 
-        end = self.stream.tell()
+        end = self._stream.tell()
         length = end - self._offset
-        self.stream.seek(self._offset)
-        pack("<I", self.stream, length)
-        self.stream.seek(end)
+        self._stream.seek(self._offset)
+        pack("<I", self._stream, length)
+        self._stream.seek(end)
 
     def _write_file(self):
         if len(self["filename"]) >= 2**16:
@@ -103,36 +104,45 @@ class MCFG_Item:
         if len(self["data"]) >= 2**16:
             raise Exception("Item content is longer than the allowed (2**16 - 1) byte maximum.")
 
-        pack("<HH", self.stream, 1, len(self["filename"]))
-        write_all(self.stream, self["filename"])
-        pack("<HH", self.stream, 2, len(self["data"]))
-        write_all(self.stream, self["data"])
+        pack("<HH", self._stream, 1, len(self["filename"]))
+        write_all(self._stream, self["filename"])
+        pack("<HH", self._stream, 2, len(self["data"]))
+        write_all(self._stream, self["data"])
 
     def _write_nv(self):
         if len(self["data"]) >= 2**16:
             raise Exception("Item content is longer than the allowed (2**16 - 1) byte maximum.")
 
-        pack("<HH", self.stream,
+        pack("<HH", self._stream,
              self["nv_id"],
              len(self["data"]),
              )
-        write_all(self.stream, self["data"])
+        write_all(self._stream, self["data"])
 
     def __getitem__(self, k):
-        return self.header[k]
+        return self._header[k]
 
     def __setitem__(self, k, v):
-        self.header[k] = v
+        self._header[k] = v
+
+    def __contains__(self, k):
+        return k in self._header
 
 class MCFG_Trailer:
     def __init__(self, stream):
-        self.stream = stream
-        self.header = {}
+        self._offset = stream.tell()
+        self._stream = stream
+        self._header = {}
+        self.parse()
+
+    def offset(self) -> int:
+        return self._offset
 
     def parse(self):
+        self._offset = self._stream.tell()
         self._parse_header()
-        self["data"] = get_bytes(self.stream, self.item_len - 10)
-        logger.debug(f"Position after parsing trailer: {self.stream.tell()}")
+        self["data"] = get_bytes(self._stream, self.item_len - 10)
+        logger.debug(f"Position after parsing trailer: {self._stream.tell()}")
 
     def parse_content(self):
         self.parse()
@@ -144,7 +154,7 @@ class MCFG_Trailer:
         magic, \
         self["reserved"], \
         magic2, \
-        = unpack("<IHHH", self.stream)
+        = unpack("<IHHH", self._stream)
 
         if magic != 10:
             raise Exception(f"Invalid item type for trailer item: {magic}")
@@ -193,41 +203,52 @@ class MCFG_Trailer:
         #assert clen + 12 == self.item_len, f"len mismatch {(clen + 12) - self.item_len}"
 
     def write(self):
+        self._offset = self._stream.tell()
+
         if len(self["data"]) + 10 >= 10**32:
             raise Exception("MCFG_Trailer content is too long: {len(self['data'])} (>10**32-1)")
 
-        pack("<IHHH", self.stream, len(self["data"]) + 10, 10, self["reserved"], 0xa1)
-        write_all(self.stream, self["data"])
+        pack("<IHHH", self._stream, len(self["data"]) + 10, 10, self["reserved"], 0xa1)
+        write_all(self._stream, self["data"])
 
     def __getitem__(self, k):
-        return self.header[k]
+        return self._header[k]
 
     def __setitem__(self, k, v):
-        self.header[k] = v
+        self._header[k] = v
+
+    def __contains__(self, k):
+        return k in self._header
 
 class MCFG:
     def __init__(self, stream):
-        self.stream = stream
-        self.header: dict = {}
+        self._offset = stream.tell()
+        self._stream = stream
+        self._header: dict = {}
+        self.parse()
+
+    def offset(self) -> int:
+        return self._offset
 
     def parse(self):
+        self._offset = self._stream.tell()
         self._parse_header()
         self._parse_items()
         self._parse_trailer()
 
     def _parse_header(self):
-        magic = get_bytes(self.stream, 4)
+        magic = get_bytes(self._stream, 4)
         if magic != b"MCFG":
             raise Exception(f"Invalid Magic value: {magic} should be b'MCFG'")
 
         self["format_type"], \
         self["configuration_type"], \
-        self["items_count"], \
+        self._items_count, \
         self["carrier_index"], \
         self["reserved"], \
         self["version_id"], \
         version_size \
-        = unpack("<HHIHHHH", self.stream)
+        = unpack("<HHIHHHH", self._stream)
 
         try:
             self["configuration_type"] = ["hw", "sw"][self["configuration_type"]]
@@ -237,20 +258,28 @@ class MCFG:
         if self["version_id"] != 4995:
             raise Exception("Unknown version")
 
-        self["version"] = get_bytes(self.stream, version_size)
+        self["version"] = get_bytes(self._stream, version_size)
 
     def _parse_items(self):
         self["items"] = []
-        for _ in range(self["items_count"] - 1): # The last item is special and treated separately
-            item = MCFG_Item(self.stream)
-            item.parse()
+        for _ in range(self._items_count - 1): # The last item is special and treated separately
+            item = MCFG_Item(self._stream)
             self["items"].append(item)
 
     def _parse_trailer(self):
-        self["trailer"] = MCFG_Trailer(self.stream)
-        self["trailer"].parse()
+        self["trailer"] = MCFG_Trailer(self._stream)
+
+    def find_nvid(self, id: int) -> Optional[int]:
+        return next(map(lambda x: x[0], filter(lambda x: x[1] == id, enumerate(self["items"]))), None)
+
+    def find_filepath(self, path: bytes) -> Optional[int]:
+        def cmp_path(x, y):
+            return x.strip(b'\x00') == y.strip(b'\x00')
+
+        return next(map(lambda x: x[0], filter(lambda x: cmp_path(x[1]["filename"], path) if "filename" in x[1] else False, enumerate(self["items"]))), None)
 
     def write(self):
+        self._offset = self._stream.tell()
         self._write_header()
         for item in self["items"]:
             item.write()
@@ -264,8 +293,8 @@ class MCFG:
         if self["configuration_type"] not in ["hw", "sw"]:
             raise Exception(f"Illegal configuration type: {self['configuration_type']}")
 
-        write_all(self.stream, b"MCFG")
-        pack("<HHIHHHH", self.stream,
+        write_all(self._stream, b"MCFG")
+        pack("<HHIHHHH", self._stream,
              self["format_type"],
              0 if self["configuration_type"] == "hw" else 1,
              len(self["items"]) + 1,
@@ -274,10 +303,13 @@ class MCFG:
              self["version_id"],
              len(self["version"]),
              )
-        write_all(self.stream, self["version"])
+        write_all(self._stream, self["version"])
 
     def __getitem__(self, k):
-        return self.header[k]
+        return self._header[k]
 
     def __setitem__(self, k, v):
-        self.header[k] = v
+        self._header[k] = v
+
+    def __contains__(self, k):
+        return k in self._header
