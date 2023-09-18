@@ -35,7 +35,7 @@ class Mbn:
             if item["type"] == MCFG_Item.NV_TYPE:
                 i = item._header.copy()
                 i["ascii"] = i["data"].decode("ascii", errors="replace").replace('\ufffd', '.')
-                i["data"] = i["data"].hex(' ', -2)
+                i["data"] = i["data"].hex(' ', -1)
                 nv_items.append(i)
                 continue
 
@@ -51,9 +51,9 @@ class Mbn:
                 write_all(f, item["data"])
 
         with open(path / "nv_items", "x") as f:
-            json.dump(nv_items, f)
+            json.dump(nv_items, f, indent=2)
         with open(path / "meta", "x") as f:
-            write_all(f, MbnJsonEncoder(partial=True).encode(self["mcfg"]))
+            write_all(f, MbnJsonEncoder(partial=True, indent=2).encode(self["mcfg"]))
         with open(path / "original_file.mbn", "xb") as f:
             self._stream.seek(0)
             buf = self._stream.read() # TODO: avoid reading everything at once

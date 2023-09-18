@@ -12,7 +12,7 @@ class MbnJsonEncoder(json.JSONEncoder):
         if isinstance(o, bytes):
             return {
                 "__type__": bytes.__name__,
-                "hex": o.hex(" ", -2),
+                "hex": o.hex(' ', -1),
                 "ascii": o.decode("ascii", errors="replace").replace('\ufffd', '.'),
                 }
         if isinstance(o, MCFG_Item):
