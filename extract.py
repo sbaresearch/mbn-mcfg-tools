@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from pathlib import Path
 import sys
 
 from mbntools.mbn import Mbn
@@ -10,9 +11,18 @@ def main():
     parser.add_argument("-c", "--check")
     parser.add_argument("-e", "--extract")
     parser.add_argument("-p", "--pack")
-    parser.add_argument("extraction_dir", nargs="?", default="extracted")
+    parser.add_argument("extraction_dir", nargs="?")
 
     args = parser.parse_args()
+
+    if args.check is None and args.extract is None and args.pack is None:
+        parser.print_help()
+        sys.exit(1)
+
+    if args.extraction_dir is None:
+        name = args.extract or args.pack
+        if name is not None:
+            args.extraction_dir = Path(name).stem + "_extracted"
 
     if args.extract is not None:
         print(f"Extracting {args.extract} to {args.extraction_dir}...", file=sys.stderr)
