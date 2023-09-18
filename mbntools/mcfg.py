@@ -269,14 +269,15 @@ class MCFG:
     def _parse_trailer(self):
         self["trailer"] = MCFG_Trailer(self._stream)
 
-    def find_nvid(self, id: int) -> Optional[int]:
-        return next(map(lambda x: x[0], filter(lambda x: x[1] == id, enumerate(self["items"]))), None)
-
-    def find_filepath(self, path: bytes) -> Optional[int]:
+    def _find_filepath(self, path: bytes) -> list[MCFG_Item]:
         def cmp_path(x, y):
-            return x.strip(b'\x00') == y.strip(b'\x00')
+            if not "filename" in x:
+                return False
 
-        return next(map(lambda x: x[0], filter(lambda x: cmp_path(x[1]["filename"], path) if "filename" in x[1] else False, enumerate(self["items"]))), None)
+            t = x["filename_alias"] if "filename_alias" in x else x["filename"]
+            return t.strip(b'\x00') == y.strip(b'\x00')
+
+        return list(filter(lambda x: cmp_path(x, path), self["items"]))
 
     def write(self):
         self._offset = self._stream.tell()

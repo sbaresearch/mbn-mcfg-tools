@@ -31,12 +31,13 @@ class Mbn:
         nv_items = []
         path = Path(path)
         files_path = utils.join(Path(path), Path("files"))
+        used_paths = set()
         for item in self["mcfg"]["items"]:
             if item["type"] == MCFG_Item.NV_TYPE:
-                i = item._header.copy()
-                i["ascii"] = i["data"].decode("ascii", errors="replace").replace('\ufffd', '.')
-                i["data"] = i["data"].hex(' ', -1)
-                nv_items.append(i)
+                it = item._header.copy()
+                it["ascii"] = it["data"].decode("ascii", errors="replace").replace('\ufffd', '.')
+                it["data"] = it["data"].hex(' ', -1)
+                nv_items.append(it)
                 continue
 
             p = utils.join(files_path, Path(item["filename"].decode().strip('\x00')))
@@ -47,7 +48,13 @@ class Mbn:
                 continue
 
             p.parent.mkdir(parents=True, exist_ok=True)
-            with open(p, "xb") as f:
+
+            free_p = free_name(p, used_paths)
+
+            if free_p != p:
+                item["filename_alias"] = str(free_p)
+
+            with open(free_p, "xb") as f:
                 write_all(f, item["data"])
 
         with open(path / "nv_items", "x") as f:
@@ -60,6 +67,14 @@ class Mbn:
             write_all(f, buf)
         with open(path / "mcfg_end", "xb") as f:
             write_all(f, self["mcfg_end"])
+
+        for item in self["mcfg"]["items"]:
+            try:
+                del item["filename_alias"]
+            except:
+                pass
+            else:
+                print("deleted *smh*")
 
     # TODO: prevent overwriting
     @staticmethod
@@ -104,20 +119,31 @@ class Mbn:
                 fp = Path(dirp) / fp
 
                 name = fp.relative_to(exdir / "files")
-                i = mcfg.find_filepath(str("/" / name).encode())
-                if i is None:
+                items = mcfg.find_filepath(str("/" / name).encode())
+
+                if len(items) == 0:
                     if use_defaults:
                         item = create_default_item(str("/" / fp.relative_to(exdir / "files")).encode() + b'\x00')
                         mcfg["items"].append(item)
-                        i = len(mcfg["items"]) - 1
                     else:
                         raise NotImplementedError
+                elif len(items) == 1:
+                    item = items[0]
+                else:
+                    raise AssertionError
 
                 with open(fp, "rb") as f:
-                    mcfg["items"][i]["data"] = f.read()
+                    item["data"] = f.read()
 
+        # TODO: remove NV Items from 'meta' during extraction
         mcfg["items"] = list(filter(lambda x: "data" in x, mcfg["items"]))
         mcfg["items"] = mcfg_nv_items + mcfg["items"]
+
+        for item in mcfg["items"]:
+            try:
+                del item["filename_alias"]
+            except:
+                pass
 
         stream = open(path, "w+b") # TODO
         with open(exdir / "original_file.mbn", "rb") as orig:
@@ -237,3 +263,14 @@ class Mbn:
 
     def __contains__(self, k):
         return k in self._values
+
+def free_name(name: Path, used: set[Path]) -> Path:
+    n = name
+    i = 1
+
+    while n in used:
+        n = name.with_name(name.name + f"_({i})")
+        i += 1
+
+    used.add(n)
+    return n
