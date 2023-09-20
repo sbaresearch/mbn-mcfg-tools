@@ -52,7 +52,7 @@ class Mbn:
             free_p = free_name(p, used_paths)
 
             if free_p != p:
-                item["filename_alias"] = str(free_p)
+                item["filename_alias"] = bytes(free_p)
 
             with open(free_p, "xb") as f:
                 write_all(f, item["data"])
