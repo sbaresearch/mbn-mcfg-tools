@@ -1,8 +1,11 @@
 import hashlib
 import logging
 import json
+import struct
+import os
 
 from pathlib import Path
+from typing import BinaryIO
 
 from elftools.elf.elffile import ELFFile
 from elftools.elf.segments import Segment
@@ -15,15 +18,16 @@ logger = logging.getLogger(__name__)
 
 # TODO: context manager
 class Mbn:
-    def __init__(self, stream):
+    def __init__(self, stream: BinaryIO, parse_trailer_content=True):
         self._stream = stream
         self._values = {}
+        self._parse_trailer_content = parse_trailer_content
         self.parse()
 
     def parse(self):
         self["elf"] = ELFFile(self._stream)
         self._stream.seek(self.get_mcfg_seg()["p_offset"])
-        self["mcfg"] = MCFG(self._stream)
+        self["mcfg"] = MCFG(self._stream, parse_trailer_content=self._parse_trailer_content)
         self._parse_mcfg_end()
 
     def extract(self, path):
@@ -67,8 +71,6 @@ class Mbn:
             self._stream.seek(0)
             buf = self._stream.read() # TODO: avoid reading everything at once
             write_all(f, buf)
-        with open(path / "mcfg_end", "xb") as f:
-            write_all(f, self["mcfg_end"])
 
         for item in self["mcfg"]["items"]:
             try:
@@ -76,7 +78,6 @@ class Mbn:
             except:
                 pass
 
-    # TODO: prevent overwriting
     @staticmethod
     def unextract(exdir, path) -> "Mbn":
         exdir = Path(exdir)
@@ -87,11 +88,12 @@ class Mbn:
         with open(exdir / "meta", "r") as f:
             mcfg = json.load(f, object_hook=decode_hook)
 
+        parse_trailer_content = "data" not in mcfg["trailer"]
+        mcfg._parse_trailer_content = parse_trailer_content
+        mcfg["trailer"]._parse_trailer_content = parse_trailer_content
+
         with open(exdir / "nv_items", "r") as f:
             nv_items = json.load(f, object_hook=decode_hook)
-
-        with open(exdir / "mcfg_end", "rb") as f:
-            mcfg_end = f.read()
 
         mcfg["items"] = []
         for item in nv_items:
@@ -111,21 +113,17 @@ class Mbn:
             except:
                 pass
 
-        stream = open(path, "w+b") # TODO
+        stream = open(path, "w+b")
         with open(exdir / "original_file.mbn", "rb") as orig:
             write_all(stream, orig.read())
         stream.seek(0)
         mbn = Mbn.__new__(Mbn)
-        mbn._stream = stream # TODO: set stream for subcomponents
         mbn._values = {
                 "elf": ELFFile(stream),
                 "mcfg": mcfg,
-                "mcfg_end": mcfg_end,
                 }
-        mbn["mcfg"]._stream = stream
-        for i in mbn["mcfg"]["items"]:
-            i._stream = stream
-        mbn["mcfg"]["trailer"]._stream = stream
+        mbn._parse_trailer_content = parse_trailer_content
+        mbn._set_stream(stream)
         return mbn
 
     def get_mcfg_seg(self) -> Segment:
@@ -137,17 +135,25 @@ class Mbn:
         *_, last_seg = self["elf"].iter_segments()
         mcfg_end = last_seg["p_offset"] + last_seg["p_filesz"]
 
-        logger.debug(f"Posiiton before calc. diff. {self._stream.tell()}")
+        if last_seg["p_align"] != 4:
+            raise Exception("MCFG segment is not 4-byte aligned.")
+
+        if last_seg["p_filesz"] % 4 != 0:
+            raise Exception("Size of MCFG segment is not padded to be a multiple of 4.")
+
         diff = mcfg_end - offset
 
-        self["mcfg_end"] = b""
-        if diff == 0:
-            return
-        elif diff < 0:
-            logger.warn("MCFG parser read past MCFG segment end.")
-        else:
-            self._stream.seek(offset)
-            self["mcfg_end"] = get_bytes(self._stream, diff)
+        if diff < 0:
+            raise Exception("MCFG parser read past MCFG segment end.")
+
+        self._stream.seek(offset - 4)
+        end = get_bytes(self._stream, diff + 4)
+        padlen = struct.unpack("<I", end[-4:])[0] - self["mcfg"]["trailer"]._item_len
+
+        if padlen <= 0 or padlen >= 5:
+            raise Exception(f"Invalid length of MCFG segment padding: {padlen} (should be in the range [1,4])")
+        if padlen != diff:
+            raise Exception("Padding length is inconsistent with trailer length.")
 
     def rewrite_hashes(self):
         n, hseg = self._get_hash_segment()
@@ -195,6 +201,11 @@ class Mbn:
 
         return mseg[0]
 
+    def _write_mcfg_padding(self, mcfg_len):
+        padding_len = 4 - mcfg_len % 4
+        self._stream.seek(-(mcfg_len % 4), os.SEEK_CUR)
+        pack("<I", self._stream, self["mcfg"]["trailer"]._item_len + padding_len)
+
     def write(self):
         if self["elf"].num_segments() != 3:
             raise NotImplementedError
@@ -202,7 +213,8 @@ class Mbn:
         self._stream.seek(self["elf"].get_segment(2)["p_offset"])
         start = self._stream.tell()
         self["mcfg"].write()
-        write_all(self._stream, self["mcfg_end"])
+        trl_end = self._stream.tell()
+        self._write_mcfg_padding(trl_end - start)
         self._stream.truncate()
         stop = self._stream.tell()
         size = stop - start
@@ -220,6 +232,14 @@ class Mbn:
         self._stream.seek(filesz_off)
         endianness = "<" if self["elf"].little_endian else ">"
         pack(endianness + 2 * sizefmt, self._stream, size, size)
+
+    def close(self):
+        self._stream.close()
+
+    def _set_stream(self, stream):
+        self._stream = stream
+        self["mcfg"]._set_stream(stream)
+        self["elf"] = ELFFile(stream)
 
     def __getitem__(self, k):
         return self._values[k]

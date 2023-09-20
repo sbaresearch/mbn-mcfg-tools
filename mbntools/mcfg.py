@@ -1,6 +1,8 @@
-import io
 import os
 import logging
+import enum
+
+from typing import BinaryIO
 
 from mbntools.utils import pack, unpack, get_bytes, write_all
 
@@ -11,7 +13,7 @@ class MCFG_Item:
     NVFILE_TYPE = 2
     FILE_TYPE = 4
 
-    def __init__(self, stream):
+    def __init__(self, stream: BinaryIO):
         self._offset = stream.tell()
         self._stream = stream
         self._header = {}
@@ -117,6 +119,9 @@ class MCFG_Item:
              )
         write_all(self._stream, self["data"])
 
+    def _set_stream(self, stream):
+        self._stream = stream
+
     def __getitem__(self, k):
         return self._header[k]
 
@@ -127,10 +132,11 @@ class MCFG_Item:
         return k in self._header
 
 class MCFG_Trailer:
-    def __init__(self, stream):
+    def __init__(self, stream: BinaryIO, parse_trailer_content=True):
         self._offset = stream.tell()
         self._stream = stream
         self._header = {}
+        self._parse_trailer_content = parse_trailer_content
         self.parse()
 
     def offset(self) -> int:
@@ -139,16 +145,13 @@ class MCFG_Trailer:
     def parse(self):
         self._offset = self._stream.tell()
         self._parse_header()
-        self["data"] = get_bytes(self._stream, self.item_len - 10)
-        logger.debug(f"Position after parsing trailer: {self._stream.tell()}")
-
-    def parse_content(self):
-        self.parse()
-        stream = io.BytesIO(self["data"])
-        self._parse_content(stream)
+        if self._parse_trailer_content:
+            self._parse_content()
+        else:
+            self["data"] = get_bytes(self._stream, self._item_len - 10)
 
     def _parse_header(self):
-        self.item_len, \
+        self._item_len, \
         magic, \
         self["reserved"], \
         magic2, \
@@ -160,54 +163,110 @@ class MCFG_Trailer:
         if magic2 != 0xa1:
             raise Exception(f"Invalid reserved field for trailer item: {magic2}")
 
-    def _parse_content(self, stream):
-        clen, = unpack("<H", stream)
-        pos = stream.tell()
+    def _parse_trl_item(self):
+        opcode, l = unpack("<BH", self._stream)
 
-        magic = get_bytes(stream, 8)
+        try:
+            opcode = TrlOpcode(opcode)
+        except ValueError:
+            logger.debug(f"Unknown trailer opcode {opcode}: " + get_bytes(self._stream, l).hex(' ', 1))
+            return
+
+        assert opcode not in self, "duplicate opcode"
+        if opcode == TrlOpcode.mnoid or opcode == TrlOpcode.unknown1:
+            unknown_field, nids = unpack("<BB", self._stream)
+
+            assert l == nids * 4 + 2, f"{opcode.name}: {l} != {nids} * 4 + 2 ({nids * 4 + 2})"
+
+            self[opcode.name] = {"ids": [], "unknown_field": unknown_field}
+            for _ in range(nids):
+                if opcode == TrlOpcode.mnoid:
+                    mcc, mnc = unpack("<HH", self._stream)
+
+                    if opcode == TrlOpcode.mnoid:
+                        self[opcode.name]["ids"].append(MnoId(mcc, mnc))
+                    else:
+                        self[opcode.name]["ids"].append((mcc, mnc))
+                else:
+                    self[opcode.name]["ids"].append(unpack("<I", self._stream))
+        else:
+            self[opcode.name] = get_bytes(self._stream, l)
+
+        if opcode == TrlOpcode.start and self[opcode.name] != b"\x00\x01":
+            logger.warn(f"TRL op 00 {self[opcode.name]} != b'\\x00\\x01'")
+        elif opcode == TrlOpcode.version2 and self[opcode.name] != self[TrlOpcode.version1.name]:
+            logger.info("MCFG Trailer contains two differing versions")
+
+    def _parse_content(self):
+        clen, = unpack("<H", self._stream)
+        pos = self._stream.tell()
+
+        magic = get_bytes(self._stream, 8)
 
         if magic != b"MCFG_TRL":
             raise Exception(f"Invalid trailer magic value: {magic}")
 
-        self["unknown1"] = get_bytes(stream, 6)
-        vlen, = unpack("<H", stream)
+        while self._stream.tell() < pos + clen:
+            self._parse_trl_item()
 
-        if vlen != 4: logger.debug(f"Version length: {vlen}")
-
-        self["version"] = get_bytes(stream, vlen)
-        self["ub1"] = get_bytes(stream, 1)
-        plen, = unpack("<H", stream)
-        self["provider_id"] = get_bytes(stream, plen)
-        self["ub2"] = get_bytes(stream, 1)
-        unknown_len, = unpack("<H", stream)
-        self["unknown2"] = get_bytes(stream, unknown_len)
-        self["ub3"] = get_bytes(stream, 1)
-
-        self["potential_version2_len"], = unpack("<H", stream)
-        self["version2"] = get_bytes(stream, vlen)
-
-        self["unknown3"] = get_bytes(stream, 4)
-        idlen, = unpack("<B", stream)
-
-        self["network_ids"] = []
-        for _ in range(idlen):
-            self["network_ids"].append(unpack("<HH", stream)) # MCC/MNC
-
-        unconsumed = clen - (idlen * 4 + 30 + unknown_len + plen + vlen + vlen)
-        self["unknown4"] = get_bytes(stream, unconsumed)
-        if unconsumed < 0:
-            logger.warn(f"Read past the end of the trailer content")
-        assert stream.tell() - pos == clen
-        #assert clen + 12 == self.item_len, f"len mismatch {(clen + 12) - self.item_len}"
+        missing = (self._offset + self._item_len) - self._stream.tell()
+        if missing != 4: \
+            raise Exception( f"Invalid trailer record size or missing padding \
+                (unconsumed trailer record bytes: {missing})")
+        get_bytes(self._stream, missing)
 
     def write(self):
-        self._offset = self._stream.tell()
+        self._write_header()
 
-        if len(self["data"]) + 10 >= 10**32:
+        if self._parse_trailer_content:
+            write_all(self._stream, b"MCFG_TRL")
+            pack("<H", self._stream, self._item_len - 12 - len(self["rest"]))
+
+            self._write_trl_items()
+
+            write_all(self._stream, b'\x00' * 4)
+        else:
+            write_all(self._stream, self["data"])
+
+    def _write_trl_items(self):
+        for c in TrlOpcode:
+            if c == TrlOpcode.mnoid or c == TrlOpcode.unknown1:
+                pack("<BH", self._stream, c.value, len(self[c.name]["ids"]) * 4 + 2)
+                pack("<BB", self._stream, self[c.name]["unknown_field"], len(self[c.name]["ids"]))
+                for o in self[c.name]["ids"]:
+                    if c == TrlOpcode.mnoid:
+                        pack("<HH", self._stream, o.mcc, o.mnc)
+                    else:
+                        pack("<I", self._stream, o)
+                continue
+
+            pack("<BH", self._stream, c.value, len(self[c.name]))
+            write_all(self._stream, self[c.name])
+
+    def _write_header(self):
+        self._offset = self._stream.tell()
+        self._item_len = self._calc_item_len()
+
+        if self._item_len >= 10**32:
             raise Exception("MCFG_Trailer content is too long: {len(self['data'])} (>10**32-1)")
 
-        pack("<IHHH", self._stream, len(self["data"]) + 10, 10, self["reserved"], 0xa1)
-        write_all(self._stream, self["data"])
+        pack("<IHHH", self._stream, self._item_len, 10, self["reserved"], 0xa1)
+
+    def _calc_item_len(self):
+        if not self._parse_trailer_content:
+            return 10 + len(self["data"])
+
+        l = 20
+        for c in TrlOpcode:
+            if c == TrlOpcode.mnoid or c == TrlOpcode.unknown1:
+                l += len(self[c.name]) * 4 + 5
+                continue
+            l += len(self[c.name]) + 3
+        l += 4 # padding
+        return l
+
+    def _set_stream(self, stream):
+        self._stream = stream
 
     def __getitem__(self, k):
         return self._header[k]
@@ -219,10 +278,11 @@ class MCFG_Trailer:
         return k in self._header
 
 class MCFG:
-    def __init__(self, stream):
+    def __init__(self, stream: BinaryIO, parse_trailer_content=True):
         self._offset = stream.tell()
         self._stream = stream
         self._header: dict = {}
+        self._parse_trailer_content = parse_trailer_content
         self.parse()
 
     def offset(self) -> int:
@@ -239,6 +299,7 @@ class MCFG:
         if magic != b"MCFG":
             raise Exception(f"Invalid Magic value: {magic} should be b'MCFG'")
 
+        # reserved: spare_crc
         self["format_type"], \
         self["configuration_type"], \
         self._items_count, \
@@ -265,7 +326,7 @@ class MCFG:
             self["items"].append(item)
 
     def _parse_trailer(self):
-        self["trailer"] = MCFG_Trailer(self._stream)
+        self["trailer"] = MCFG_Trailer(self._stream, parse_trailer_content=self._parse_trailer_content)
 
     def _find_filepath(self, path: bytes) -> list[MCFG_Item]:
         def cmp_path(x, y):
@@ -304,6 +365,12 @@ class MCFG:
              )
         write_all(self._stream, self["version"])
 
+    def _set_stream(self, stream):
+        self._stream = stream
+        for i in self["items"]:
+            i._set_stream(stream)
+        self["trailer"]._set_stream(stream)
+
     def __getitem__(self, k):
         return self._header[k]
 
@@ -312,3 +379,20 @@ class MCFG:
 
     def __contains__(self, k):
         return k in self._header
+
+class MnoId:
+    def __init__(self, mcc: int, mnc: int):
+        self.mcc = mcc
+        self.mnc = mnc
+
+@enum.unique
+class TrlOpcode(enum.Enum):
+    start = 0
+    version1 = 1
+    operator = 3
+    unknown1 = 4 # TODO: partial iccids?
+    version2 = 5
+    mnoid = 6
+    unknown2 = 7
+    checksum = 8
+    end = 9
