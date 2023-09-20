@@ -60,7 +60,7 @@ class Mbn:
         with open(path / "nv_items", "x") as f:
             json.dump(nv_items, f, indent=2)
         with open(path / "meta", "x") as f:
-            write_all(f, MbnJsonEncoder(partial=True, indent=2).encode(self["mcfg"]))
+            write_all(f, MbnJsonEncoder(extract_meta=True, indent=2).encode(self["mcfg"]))
         with open(path / "original_file.mbn", "xb") as f:
             self._stream.seek(0)
             buf = self._stream.read() # TODO: avoid reading everything at once

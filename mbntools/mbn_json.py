@@ -4,8 +4,8 @@ import mbntools.mcfg
 from mbntools.mcfg import *
 
 class MbnJsonEncoder(json.JSONEncoder):
-    def __init__(self, *args, partial=False, **kwargs):
-        self._partial = partial
+    def __init__(self, *args, extract_meta=False, **kwargs):
+        self._extract_meta = extract_meta
         super().__init__(*args, **kwargs)
 
     def default(self, o):
@@ -17,12 +17,17 @@ class MbnJsonEncoder(json.JSONEncoder):
                 }
         if isinstance(o, MCFG_Item):
             r = o._header.copy()
-            if self._partial:
+            if self._extract_meta:
                 del r["data"]
         elif isinstance(o, MCFG_Trailer):
             r = {"reserved": o["reserved"], "data": o["data"]}
         elif isinstance(o, MCFG):
-            r = o._header
+            if self._extract_meta:
+                file_items = list(filter(lambda x: "filename" in x, o["items"]))
+                r = o._header.copy()
+                r["items"] = file_items
+            else:
+                r = o._header
         else:
             return super().default(o)
         r["__type__"] = type(o).__name__
@@ -33,7 +38,7 @@ def decode_hook(o):
         return o
 
     if o["__type__"] == bytes.__name__:
-        return bytes.fromhex(o["hex"]) # TODO: error handling
+        return bytes.fromhex(o["hex"])
 
     cls = getattr(mbntools.mcfg, o["__type__"])
     r = cls.__new__(cls)
