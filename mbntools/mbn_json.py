@@ -17,15 +17,14 @@ class MbnJsonEncoder(json.JSONEncoder):
                 }
         if isinstance(o, MCFG_Item):
             r = o._header.copy()
-            if self._extract_meta:
+            if self._extract_meta and o["type"] != MCFG_Item.NV_TYPE:
                 del r["data"]
         elif isinstance(o, MCFG_Trailer):
             r = {"reserved": o["reserved"], "data": o["data"]}
         elif isinstance(o, MCFG):
             if self._extract_meta:
-                file_items = list(filter(lambda x: "filename" in x, o["items"]))
                 r = o._header.copy()
-                r["items"] = file_items
+                del r["items"]
             else:
                 r = o._header
         else:

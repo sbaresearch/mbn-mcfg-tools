@@ -1,10 +1,8 @@
 import hashlib
 import logging
-import os
 import json
 
 from pathlib import Path
-from typing import Optional
 
 from elftools.elf.elffile import ELFFile
 from elftools.elf.segments import Segment
@@ -15,6 +13,7 @@ from mbntools.mbn_json import MbnJsonEncoder, decode_hook
 
 logger = logging.getLogger(__name__)
 
+# TODO: context manager
 class Mbn:
     def __init__(self, stream):
         self._stream = stream
@@ -28,19 +27,25 @@ class Mbn:
         self._parse_mcfg_end()
 
     def extract(self, path):
+        encoder = MbnJsonEncoder(extract_meta=True, indent=2)
+
         nv_items = []
         path = Path(path)
         files_path = utils.join(Path(path), Path("files"))
         used_paths = set()
         for item in self["mcfg"]["items"]:
             if item["type"] == MCFG_Item.NV_TYPE:
-                it = item._header.copy()
-                it["ascii"] = it["data"].decode("ascii", errors="replace").replace('\ufffd', '.')
-                it["data"] = it["data"].hex(' ', -1)
-                nv_items.append(it)
+                nv_items.append(item)
                 continue
 
-            p = utils.join(files_path, Path(item["filename"].decode().strip('\x00')))
+            filename = Path(item["filename"].strip(b'\x00').decode())
+            free_name = _free_name(filename, used_paths)
+
+            if free_name != filename:
+                item["filename_alias"] = bytes(free_name)
+                filename = free_name
+
+            p = utils.join(files_path, filename)
             p.resolve()
 
             if files_path not in p.parents:
@@ -49,18 +54,15 @@ class Mbn:
 
             p.parent.mkdir(parents=True, exist_ok=True)
 
-            free_p = free_name(p, used_paths)
-
-            if free_p != p:
-                item["filename_alias"] = bytes(free_p)
-
-            with open(free_p, "xb") as f:
+            with open(p, "xb") as f:
                 write_all(f, item["data"])
 
+            nv_items.append(item)
+
         with open(path / "nv_items", "x") as f:
-            json.dump(nv_items, f, indent=2)
+            json.dump(nv_items, f, indent=2, default=encoder.default)
         with open(path / "meta", "x") as f:
-            write_all(f, MbnJsonEncoder(extract_meta=True, indent=2).encode(self["mcfg"]))
+            write_all(f, encoder.encode(self["mcfg"]))
         with open(path / "original_file.mbn", "xb") as f:
             self._stream.seek(0)
             buf = self._stream.read() # TODO: avoid reading everything at once
@@ -70,28 +72,13 @@ class Mbn:
 
         for item in self["mcfg"]["items"]:
             try:
-                del item["filename_alias"]
+                del item._header["filename_alias"]
             except:
                 pass
-            else:
-                print("deleted *smh*")
 
     # TODO: prevent overwriting
     @staticmethod
-    def unextract(exdir, path, use_defaults=True) -> "Mbn":
-        def create_default_item(fname: Optional[bytes] = None):
-            item = MCFG_Item.__new__(MCFG_Item)
-            item._header = {
-                    "type": MCFG_Item.NV_TYPE, # TODO: find suitable default
-                    "attributes": 0,
-                    "reserved": 0,
-                    }
-            if fname is not None:
-                item["filename"] = fname
-                item["type"] = MCFG_Item.FILE_TYPE
-
-            return item
-
+    def unextract(exdir, path) -> "Mbn":
         exdir = Path(exdir)
 
         if not all(map(lambda n: (exdir / n).exists(), ["nv_items", "meta", "original_file.mbn", "files"])):
@@ -101,43 +88,22 @@ class Mbn:
             mcfg = json.load(f, object_hook=decode_hook)
 
         with open(exdir / "nv_items", "r") as f:
-            nv_items = json.load(f)
+            nv_items = json.load(f, object_hook=decode_hook)
 
         with open(exdir / "mcfg_end", "rb") as f:
             mcfg_end = f.read()
 
-        mcfg_nv_items = []
-        for nv_item in nv_items:
-            item = MCFG_Item.__new__(MCFG_Item)
-            item._header = nv_item
-            del item._header["ascii"]
-            item["data"] = bytes.fromhex(item["data"])
-            mcfg_nv_items.append(item)
+        mcfg["items"] = []
+        for item in nv_items:
+            if item["type"] == MCFG_Item.NV_TYPE:
+                mcfg["items"].append(item)
+                continue
 
-        for dirp, _, fps in os.walk(exdir / "files"): # TODO use onerror
-            for fp in fps:
-                fp = Path(dirp) / fp
+            fp = _extracted_filename(item)
+            with open(utils.join(exdir / "files", fp), "rb") as f: # TODO error handling
+                item["data"] = f.read()
 
-                name = fp.relative_to(exdir / "files")
-                items = mcfg._find_filepath(str("/" / name).encode())
-
-                if len(items) == 0:
-                    if use_defaults:
-                        item = create_default_item(str("/" / fp.relative_to(exdir / "files")).encode() + b'\x00')
-                        mcfg["items"].append(item)
-                    else:
-                        raise NotImplementedError
-                elif len(items) == 1:
-                    item = items[0]
-                else:
-                    raise AssertionError
-
-                with open(fp, "rb") as f:
-                    item["data"] = f.read()
-
-        # TODO: remove NV Items from 'meta' during extraction
-        mcfg["items"] = list(filter(lambda x: "data" in x, mcfg["items"]))
-        mcfg["items"] = mcfg_nv_items + mcfg["items"]
+            mcfg["items"].append(item)
 
         for item in mcfg["items"]:
             try:
@@ -264,7 +230,7 @@ class Mbn:
     def __contains__(self, k):
         return k in self._values
 
-def free_name(name: Path, used: set[Path]) -> Path:
+def _free_name(name: Path, used: set[Path]) -> Path:
     n = name
     i = 1
 
@@ -274,3 +240,7 @@ def free_name(name: Path, used: set[Path]) -> Path:
 
     used.add(n)
     return n
+
+def _extracted_filename(item: MCFG_Item) -> Path:
+    n = item["filename_alias"] if "filename_alias" in item else item["filename"]
+    return Path(n.strip(b'\x00').decode())

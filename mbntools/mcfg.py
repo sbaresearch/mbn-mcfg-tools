@@ -2,8 +2,6 @@ import io
 import os
 import logging
 
-from typing import Optional
-
 from mbntools.utils import pack, unpack, get_bytes, write_all
 
 logger = logging.getLogger(__name__)
