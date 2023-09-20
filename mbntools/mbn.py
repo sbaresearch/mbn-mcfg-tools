@@ -119,7 +119,7 @@ class Mbn:
                 fp = Path(dirp) / fp
 
                 name = fp.relative_to(exdir / "files")
-                items = mcfg.find_filepath(str("/" / name).encode())
+                items = mcfg._find_filepath(str("/" / name).encode())
 
                 if len(items) == 0:
                     if use_defaults:
