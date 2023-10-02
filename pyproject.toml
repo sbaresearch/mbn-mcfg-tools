@@ -8,3 +8,12 @@ version = "0.0.1"
 dependencies = [
   "pyelftools"
 ]
+
+[project.scripts]
+extract = "mbntools.cli:main"
+
+[project.optional-dependencies]
+test = [ "pytest" ]
+
+[tools.pytest.ini_options]
+testpaths = ["tests"]
