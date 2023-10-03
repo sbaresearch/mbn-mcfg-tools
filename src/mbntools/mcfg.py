@@ -289,6 +289,9 @@ class MCFG_Trailer:
     def __setitem__(self, k, v):
         self._header[k] = v
 
+    def __delitem__(self, k):
+        del self._header[k]
+
     def __contains__(self, k):
         return k in self._header
 
