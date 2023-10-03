@@ -15,7 +15,7 @@ class MbnJsonEncoder(json.JSONEncoder):
                 }
         elif isinstance(o, MCFG_Item):
             r = o._header.copy()
-            if self._extract_meta and o["type"] != MCFG_Item.NV_TYPE:
+            if self._extract_meta and o["type"] in [MCFG_Item.NVFILE_TYPE, MCFG_Item.FILE_TYPE]:
                 del r["data"]
         elif isinstance(o, MCFG_Trailer):
             r = o._header

@@ -39,7 +39,7 @@ class Mbn:
         files_path = utils.join(Path(path), Path("files"))
         used_paths = set()
         for item in self["mcfg"]["items"]:
-            if item["type"] == MCFG_Item.NV_TYPE:
+            if item["type"] not in [MCFG_Item.NVFILE_TYPE, MCFG_Item.FILE_TYPE]:
                 nv_items.append(item)
                 continue
 
@@ -98,7 +98,7 @@ class Mbn:
 
         mcfg["items"] = []
         for item in nv_items:
-            if item["type"] == MCFG_Item.NV_TYPE:
+            if item["type"] not in [MCFG_Item.NVFILE_TYPE, MCFG_Item.FILE_TYPE]:
                 mcfg["items"].append(item)
                 continue
 

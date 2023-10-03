@@ -40,7 +40,8 @@ class MCFG_Item:
         elif self["type"] == self.NVFILE_TYPE or self["type"] == self.FILE_TYPE:
             self.parse_file()
         else:
-            raise Exception(f"Unknown item type: {self['type']}")
+            logger.info(f"Unknown item type: {self['type']}")
+            self["data"] = get_bytes(self._stream, self._length - 8)
 
     def parse_nv(self):
         self["nv_id"], \
@@ -91,12 +92,20 @@ class MCFG_Item:
             self._write_nv()
         elif self["type"] == self.NVFILE_TYPE or self["type"] == self.FILE_TYPE:
             self._write_file()
+        else:
+            self._write_unknown_type()
 
         end = self._stream.tell()
         length = end - self._offset
         self._stream.seek(self._offset)
         pack("<I", self._stream, length)
         self._stream.seek(end)
+
+    def _write_unknown_type(self):
+        if len(self["data"]) >= 2**16 - 8:
+            raise Exception("Item content is longer than the allowed (2**16 - 9) byte maximum.")
+
+        write_all(self._stream, self["data"])
 
     def _write_file(self):
         if len(self["filename"]) >= 2**16:
@@ -173,7 +182,7 @@ class MCFG_Trailer:
             return
 
         assert opcode not in self, "duplicate opcode"
-        if opcode == TrlOpcode.mnoid or opcode == TrlOpcode.unknown1:
+        if opcode == TrlOpcode.mnoid or opcode == TrlOpcode.iccids:
             unknown_field, nids = unpack("<BB", self._stream)
 
             assert l == nids * 4 + 2, f"{opcode.name}: {l} != {nids} * 4 + 2 ({nids * 4 + 2})"
@@ -188,7 +197,7 @@ class MCFG_Trailer:
                     else:
                         self[opcode.name]["ids"].append((mcc, mnc))
                 else:
-                    self[opcode.name]["ids"].append(unpack("<I", self._stream))
+                    self[opcode.name]["ids"].append(unpack("<I", self._stream)[0])
         else:
             self[opcode.name] = get_bytes(self._stream, l)
 
@@ -219,8 +228,8 @@ class MCFG_Trailer:
         self._write_header()
 
         if self._parse_trailer_content:
+            pack("<H", self._stream, self._item_len - 12 - 4)
             write_all(self._stream, b"MCFG_TRL")
-            pack("<H", self._stream, self._item_len - 12 - len(self["rest"]))
 
             self._write_trl_items()
 
@@ -230,7 +239,10 @@ class MCFG_Trailer:
 
     def _write_trl_items(self):
         for c in TrlOpcode:
-            if c == TrlOpcode.mnoid or c == TrlOpcode.unknown1:
+            if c.name not in self:
+                continue
+
+            if c == TrlOpcode.mnoid or c == TrlOpcode.iccids:
                 pack("<BH", self._stream, c.value, len(self[c.name]["ids"]) * 4 + 2)
                 pack("<BB", self._stream, self[c.name]["unknown_field"], len(self[c.name]["ids"]))
                 for o in self[c.name]["ids"]:
@@ -258,8 +270,11 @@ class MCFG_Trailer:
 
         l = 20
         for c in TrlOpcode:
-            if c == TrlOpcode.mnoid or c == TrlOpcode.unknown1:
-                l += len(self[c.name]) * 4 + 5
+            if c.name not in self:
+                continue
+
+            if c == TrlOpcode.mnoid or c == TrlOpcode.iccids:
+                l += len(self[c.name]["ids"]) * 4 + 5
                 continue
             l += len(self[c.name]) + 3
         l += 4 # padding
@@ -385,12 +400,19 @@ class MnoId:
         self.mcc = mcc
         self.mnc = mnc
 
+    def __str__(self) -> str:
+        return f"MnoId(mcc: {self.mcc}, MNC: {self.mnc})"
+
+    def __repr__(self) -> str:
+        return f"MnoId({self.mcc}, {self.mnc})"
+
 @enum.unique
 class TrlOpcode(enum.Enum):
     start = 0
     version1 = 1
+    unknown1 = 2
     operator = 3
-    unknown1 = 4 # TODO: partial iccids?
+    iccids = 4
     version2 = 5
     mnoid = 6
     unknown2 = 7
