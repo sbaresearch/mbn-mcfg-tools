@@ -1,3 +1,4 @@
+import enum
 import hashlib
 import logging
 import json
@@ -10,7 +11,7 @@ from typing import BinaryIO
 from elftools.elf.elffile import ELFFile
 from elftools.elf.segments import Segment
 from mbntools.mcfg import MCFG, MCFG_Item
-from mbntools.utils import write_all, get_bytes, pack
+from mbntools.utils import write_all, get_bytes, pack, unpack
 from mbntools import utils
 from mbntools.mbn_json import MbnJsonEncoder, decode_hook
 
@@ -157,39 +158,52 @@ class Mbn:
 
     def rewrite_hashes(self):
         n, hseg = self._get_hash_segment()
+        hash_type = self._get_hash_segment_type(hseg)
+        dig_size = hashlib.new(hash_type.name).digest_size
+        offset = hash_type.hashtable_offset()
 
         for i, s in enumerate(self["elf"].iter_segments()):
             if i == n:
-                self._stream.seek(hseg["p_offset"] + 40 + i * 32)
-                write_all(self._stream, b'\x00' * 32)
+                self._stream.seek(hseg["p_offset"] + offset + i * dig_size)
+                write_all(self._stream, b'\x00' * dig_size)
                 continue
 
-            h = hashlib.sha256(s.data())
-            self._stream.seek(hseg["p_offset"] + 40 + i * 32)
+            h = hashlib.new(hash_type.name, s.data())
+            self._stream.seek(hseg["p_offset"] + offset + i * dig_size)
             write_all(self._stream, h.digest())
 
     def check_hashes(self) -> bool:
         n, hseg = self._get_hash_segment()
         num_segs = self["elf"].num_segments()
-        hashes = []
-        data = hseg.data()[40:]
-        for _ in range(num_segs):
-            hashes.append(data[:32])
-            data = data[32:]
+        hash_type = self._get_hash_segment_type(hseg)
+        dig_size = hashlib.new(hash_type.name).digest_size
 
-        if hashes[n] != b'\x00' * 32:
+        hashes = []
+        data = hseg.data()[hash_type.hashtable_offset():]
+        for _ in range(num_segs):
+            hashes.append(data[:dig_size])
+            data = data[dig_size:]
+
+        if hashes[n] != b'\x00' * dig_size:
             return False
 
         for i, s in enumerate(self["elf"].iter_segments()):
             if i == n:
                 continue
 
-            h = hashlib.sha256(s.data())
+            h = hashlib.new(hash_type.name, s.data())
 
             if hashes[i] != h.digest():
                 return False
 
         return True
+
+    def _get_hash_segment_type(self, seg: Segment) -> "HashType":
+        self._stream.seek(seg["p_offset"] + 4)
+        try:
+            return HashType(unpack("<I", self._stream)[0])
+        except ValueError:
+            raise Exception("Unknown hash algorithm.")
 
     def _get_hash_segment(self) -> tuple[int, Segment]:
         mseg = list(filter(lambda x: x[1]["p_flags"] & 0x200000 != 0, enumerate(self["elf"].iter_segments())))
@@ -264,3 +278,16 @@ def _free_name(name: Path, used: set[Path]) -> Path:
 def _extracted_filename(item: MCFG_Item) -> Path:
     n = item["filename_alias"] if "filename_alias" in item else item["filename"]
     return Path(n.strip(b'\x00').decode())
+
+@enum.unique
+class HashType(enum.Enum):
+    sha256 = 3
+    sha384 = 6
+
+    def hashtable_offset(self) -> int:
+        if self.value == 3:
+            return 40
+        elif self.value == 6:
+            return 168 # TODO
+        else:
+            raise NotImplementedError
