@@ -36,6 +36,10 @@ def main():
         except KeyError:
             logging.info("Trailer does not contain 'end' field.")
 
+        hash_seg = mbn._get_hash_segment()[1]
+        mbn._stream.seek(hash_seg["p_offset"] + 4)
+        mbn._stream.write(b'\x03\x00\x00\x00')
+
         mbn.write()
         mbn.rewrite_hashes()
 
