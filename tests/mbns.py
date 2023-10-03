@@ -9,7 +9,7 @@ TESTMBNSDIR = Path("testmbns")
 
 @functools.cache
 def mbn_paths():
-    xfail = ["nokia_2_8_franken.mbn"]
+    xfail = []
 
     def f(p):
         r = TESTMBNSDIR / p
