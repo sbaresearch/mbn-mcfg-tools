@@ -25,16 +25,6 @@ def main():
         mbn["mcfg"]["format_type"] = 3
         mbn["mcfg"]["version"] = downgraded_version(mbn["mcfg"]["version"])
         mbn["mcfg"]["trailer"]["version1"] = downgraded_version(mbn["mcfg"]["trailer"]["version1"])
-        mbn["mcfg"]["trailer"]["version2"] = downgraded_version(mbn["mcfg"]["trailer"]["version2"])
-
-        try:
-            del mbn["mcfg"]["trailer"]["checksum"]
-        except KeyError:
-            logging.info("Trailer does not contain 'checksum' field.")
-        try:
-            del mbn["mcfg"]["trailer"]["end"]
-        except KeyError:
-            logging.info("Trailer does not contain 'end' field.")
 
         hash_seg = mbn._get_hash_segment()[1]
         mbn._stream.seek(hash_seg["p_offset"] + 4)
