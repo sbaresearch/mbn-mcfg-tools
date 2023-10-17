@@ -1,8 +1,9 @@
-import os
-import logging
 import enum
+import logging
+import os
 
 from typing import BinaryIO
+from collections.abc import Generator
 
 from mbntools.utils import pack, unpack, get_bytes, write_all
 
@@ -345,6 +346,28 @@ class MCFG:
 
     def _parse_trailer(self):
         self["trailer"] = MCFG_Trailer(self._stream, parse_trailer_content=self._parse_trailer_content)
+
+    def remove_filename(self, name: bytes) -> None:
+        self["items"] = list(filter(lambda i: "filename" not in i or i["filename"].strip(b'\x00') != name.strip(b'\x00'), self["items"])) # pyright: ignore [reportGeneralTypeIssues]
+
+    def remove_nv_id(self, nvid: int) -> None:
+        self["items"] = list(filter(lambda i: "nv_id" not in i or i["nv_id"] != nvid, self["items"])) # pyright: ignore [reportGeneralTypeIssues]
+
+    def filenames(self) -> Generator[bytes, None, None]:
+        for i in self["items"]:
+            if "filename" in i:
+                yield i["filename"]
+
+    def nv_ids(self) -> Generator[int, None, None]:
+        for i in self["items"]:
+            if "nv_id" in i:
+                yield i["nv_id"]
+
+    def get_file_items(self, name: bytes) -> list[MCFG_Item]:
+        return list(filter(lambda i: "filename" in i and name == i["filename"], self["items"]))
+
+    def get_nv_items(self, nvid: int) -> list[MCFG_Item]:
+        return list(filter(lambda i: "nv_id" in i and nvid == i["nv_id"], self["items"]))
 
     def _find_filepath(self, path: bytes) -> list[MCFG_Item]:
         def cmp_path(x, y):
