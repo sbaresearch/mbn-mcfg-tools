@@ -2,10 +2,13 @@ import enum
 import logging
 import os
 
+from io import BytesIO
+
 from typing import BinaryIO
 from collections.abc import Generator
 
 from mbntools.utils import pack, unpack, get_bytes, write_all
+from mbntools.items_generated import NV_ITEMS, EFS_FILES, NvContentParseError
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,30 @@ class MCFG_Item:
         self._offset = self._stream.tell()
         self.parse_header()
         self.parse_content()
+
+    def parse_item_content(self):
+        if len(self["data"]) == 0:
+            return None
+
+        if self["data"][0] == 7:
+            s = BytesIO(self["data"][1:])
+        else:
+            s = BytesIO(self["data"])
+
+        try:
+            if self["type"] == MCFG_Item.NV_TYPE and self["nv_id"] in NV_ITEMS:
+                c = NV_ITEMS[self["nv_id"]](s)
+                c._rest = s.read()
+                return c
+            elif self["type"] in [MCFG_Item.NVFILE_TYPE, MCFG_Item.FILE_TYPE] and self["filename"].strip(b'\x00').decode() in EFS_FILES:
+                c = EFS_FILES[self["filename"].strip(b'\x00').decode()](s)
+                c._rest = s.read()
+                return c
+            else:
+                return None
+        except NvContentParseError as e:
+            e.partial._rest = s.read()
+            raise e
 
     def parse_header(self):
         self._length, \
@@ -436,7 +463,7 @@ class MnoId:
 class TrlOpcode(enum.Enum):
     start = 0
     version1 = 1
-    unknown1 = 2
+    unknown1 = 2 # APPLICABLE_MCC_MNC (https://github.com/Biktorgj/mcfg_tools/blob/e1293b557ec58e535522f151f765f757d9f93af5/mcfg.h#L250C3-L250C41)
     operator = 3
     iccids = 4
     version2 = 5

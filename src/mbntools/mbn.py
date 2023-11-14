@@ -13,11 +13,11 @@ from elftools.elf.segments import Segment
 from mbntools.mcfg import MCFG, MCFG_Item
 from mbntools.utils import write_all, get_bytes, pack, unpack
 from mbntools import utils
-from mbntools.mbn_json import MbnJsonEncoder, decode_hook
+from mbntools.mbn_json import MbnJsonEncoder, decode_hook, NvContentEncoder
+from mbntools import items_generated
 
 logger = logging.getLogger(__name__)
 
-# TODO: context manager
 class Mbn:
     def __init__(self, stream: BinaryIO, parse_trailer_content=True):
         self._stream = stream
@@ -31,20 +31,53 @@ class Mbn:
         self["mcfg"] = MCFG(self._stream, parse_trailer_content=self._parse_trailer_content)
         self._parse_mcfg_end()
 
+    @staticmethod
+    def _write_parsed_content(item, p, encoder):
+        try:
+            t = item.parse_item_content()
+            if t is not None:
+                c = json.dumps(t, indent=2, default=encoder.default)
+            else:
+                c = None
+        except items_generated.NvContentParseError as e:
+            c = f"Exception: {repr(_first_implicit_exception(e))}\n"
+            c += json.dumps(e.partial, indent=2, default=encoder.default)
+        if c is not None:
+            try:
+                with open(p, "x") as f:
+                    write_all(f, c)
+            except Exception as e:
+                logger.warn(f"Exception while trying to parse nv item content: {type(e)}: {e}")
+
     def extract(self, path):
         encoder = MbnJsonEncoder(extract_meta=True, indent=2)
 
         nv_items = []
         path = Path(path)
         files_path = utils.join(Path(path), Path("files"))
+        nv_path = utils.join(Path(path), Path("nv"))
+        nv_files_path = utils.join(Path(path), Path("parsed_nv_files"))
+        nv_path = utils.join(Path(path), Path("parsed_nv_items"))
+        nv_path.mkdir(parents=True)
         used_paths = set()
+        used_nv_ids = set()
         for item in self["mcfg"]["items"]:
+            if item["type"] == MCFG_Item.NV_TYPE:
+                name = Path(str(item["nv_id"]))
+                free_name = _free_name(name, used_nv_ids)
+                used_nv_ids.add(free_name)
+                nv_items.append(item)
+                Mbn._write_parsed_content(item, utils.join(nv_path, Path(free_name)), NvContentEncoder())
+                continue
+
             if item["type"] not in [MCFG_Item.NVFILE_TYPE, MCFG_Item.FILE_TYPE]:
+                logger.warning(f"Unknown mcfg item type: {item['type']}")
                 nv_items.append(item)
                 continue
 
             filename = Path(item["filename"].strip(b'\x00').decode())
             free_name = _free_name(filename, used_paths)
+            used_paths.update(free_name.parents, [free_name])
 
             if free_name != filename:
                 item["filename_alias"] = bytes(free_name)
@@ -61,6 +94,10 @@ class Mbn:
 
             with open(p, "xb") as f:
                 write_all(f, item["data"])
+
+            p = utils.join(nv_files_path, filename)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            Mbn._write_parsed_content(item, p, NvContentEncoder())
 
             nv_items.append(item)
 
@@ -272,7 +309,6 @@ def _free_name(name: Path, used: set[Path]) -> Path:
         n = name.with_name(name.name + f"_({i})")
         i += 1
 
-    used.add(n)
     return n
 
 def _extracted_filename(item: MCFG_Item) -> Path:
@@ -291,3 +327,8 @@ class HashType(enum.Enum):
             return 168 # TODO
         else:
             raise NotImplementedError
+
+def _first_implicit_exception(e: BaseException) -> BaseException:
+    while e.__context__ is not None:
+        e = e.__context__
+    return e

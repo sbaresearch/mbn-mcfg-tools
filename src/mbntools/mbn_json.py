@@ -1,6 +1,26 @@
 import json
+import enum
+
+import mbntools.items_generated
 
 from mbntools.mcfg import MCFG, MCFG_Item, MCFG_Trailer, MnoId
+
+generated_classes = set([t for t in mbntools.items_generated.__dict__.values() if isinstance(t, type) and not isinstance(t, enum.Enum)])
+
+class NvContentEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, enum.Enum):
+            r = {"name": o.name, "value": o.value}
+        elif type(o) in generated_classes:
+            r = {"fields": o._fields}
+            if hasattr(o, "_rest"):
+                r["unparsed"] = o._rest
+        else:
+            return super().default(o)
+
+        r["__type__"] = type(o).__name__
+        return r
+
 
 class MbnJsonEncoder(json.JSONEncoder):
     def __init__(self, *args, extract_meta=False, **kwargs):
