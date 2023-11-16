@@ -9,7 +9,12 @@ generated_classes = set([t for t in mbntools.items_generated.__dict__.values() i
 
 class NvContentEncoder(json.JSONEncoder):
     def default(self, o):
-        if isinstance(o, enum.Enum):
+        if isinstance(o, bytes):
+            r = {
+                "hex": o.hex(' ', -1),
+                "ascii": o.decode("ascii", errors="replace").replace('\ufffd', '.'),
+                }
+        elif isinstance(o, enum.Enum):
             r = {"name": o.name, "value": o.value}
         elif type(o) in generated_classes:
             r = {"fields": o._fields}
