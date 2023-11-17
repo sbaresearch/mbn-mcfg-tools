@@ -391,7 +391,7 @@ class MCFG:
                 yield i["nv_id"]
 
     def get_file_items(self, name: bytes) -> list[MCFG_Item]:
-        return list(filter(lambda i: "filename" in i and name == i["filename"], self["items"]))
+        return list(filter(lambda i: "filename" in i and name.strip(b'\x00') == i["filename"].strip(b'\x00'), self["items"]))
 
     def get_nv_items(self, nvid: int) -> list[MCFG_Item]:
         return list(filter(lambda i: "nv_id" in i and nvid == i["nv_id"], self["items"]))
