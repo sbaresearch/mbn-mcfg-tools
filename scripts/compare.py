@@ -8,7 +8,7 @@ import sys
 
 import colorama
 
-from mbntools.mbn import Mbn
+from mbn_mcfg_tools.mbn import Mbn
 
 class DiffWriter:
     def __init__(self, stream, maxwidth=128, use_color=True):

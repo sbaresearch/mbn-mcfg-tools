@@ -11,8 +11,8 @@ from typing import List, Optional
 
 from defusedxml import ElementTree as ET
 
-from mbntools.mbn import Mbn
-from mbntools.mcfg import MCFG_Item
+from mbn_mcfg_tools.mbn import Mbn
+from mbn_mcfg_tools.mcfg import MCFG_Item
 
 logger = logging.getLogger(__name__)
 

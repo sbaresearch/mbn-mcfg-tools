@@ -8,7 +8,7 @@
       pkgs = nixpkgs.legacyPackages.${system};
       pyprj = pkgs.lib.trivial.importTOML ./pyproject.toml;
       packageOverrides = self: super: {
-        mbntools = self.buildPythonPackage {
+        mbnmcfgtools = self.buildPythonPackage {
           pname = pyprj.project.name;
           version = pyprj.project.version;
           pyproject = true;
@@ -21,10 +21,10 @@
       };
       python' = pkgs.python311.override { inherit packageOverrides; };
     in {
-      packages.default = python'.pkgs.mbntools;
+      packages.default = python'.pkgs.mbnmcfgtools;
       devShells.default = pkgs.mkShell {
         packages = [
-          (python'.withPackages (p: with p; [ mbntools pytest ]))
+          (python'.withPackages (p: with p; [ mbnmcfgtools pytest ]))
           pkgs.nodePackages.pyright
           ];
       };

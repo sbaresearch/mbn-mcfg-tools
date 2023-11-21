@@ -7,8 +7,8 @@ from io import BytesIO
 from typing import BinaryIO
 from collections.abc import Generator
 
-from mbntools.utils import pack, unpack, get_bytes, write_all
-from mbntools.items_generated import NV_ITEMS, EFS_FILES, NvContentParseError
+from mbn_mcfg_tools.utils import pack, unpack, get_bytes, write_all
+from mbn_mcfg_tools.items_generated import NV_ITEMS, EFS_FILES, NvContentParseError
 
 logger = logging.getLogger(__name__)
 

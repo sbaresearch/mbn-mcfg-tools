@@ -10,11 +10,11 @@ from typing import BinaryIO
 
 from elftools.elf.elffile import ELFFile
 from elftools.elf.segments import Segment
-from mbntools.mcfg import MCFG, MCFG_Item
-from mbntools.utils import write_all, get_bytes, pack, unpack
-from mbntools import utils
-from mbntools.mbn_json import MbnJsonEncoder, decode_hook, NvContentEncoder
-from mbntools import items_generated
+from mbn_mcfg_tools.mcfg import MCFG, MCFG_Item
+from mbn_mcfg_tools.utils import write_all, get_bytes, pack, unpack
+from mbn_mcfg_tools import utils
+from mbn_mcfg_tools.mbn_json import MbnJsonEncoder, decode_hook, NvContentEncoder
+from mbn_mcfg_tools import items_generated
 
 logger = logging.getLogger(__name__)
 
