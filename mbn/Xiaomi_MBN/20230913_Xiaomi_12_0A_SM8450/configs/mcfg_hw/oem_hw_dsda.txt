@@ -1,0 +1,1 @@
+mcfg_hw/generic/common/Waipio/STANDALONE/LA/DSDA_Hybrid/mcfg_hw.mbn

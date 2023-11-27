@@ -1,0 +1,1 @@
+mcfg_hw/generic/common/hq/in/hwinfo/mcfg_hw.mbn

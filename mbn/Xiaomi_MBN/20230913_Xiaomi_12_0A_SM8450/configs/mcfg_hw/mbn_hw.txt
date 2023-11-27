@@ -1,0 +1,6 @@
+mcfg_hw/generic/common/Waipio/STANDALONE/LA/DSDA_Hybrid/mcfg_hw.mbn
+mcfg_hw/generic/common/Waipio/STANDALONE/LA/DSDA_Hybrid_CDMALess/mcfg_hw.mbn
+mcfg_hw/generic/common/Waipio/STANDALONE/LA/DSDS/mcfg_hw.mbn
+mcfg_hw/generic/common/Waipio/STANDALONE/LA/DSDS_CDMALess/mcfg_hw.mbn
+mcfg_hw/generic/common/Waipio/STANDALONE/LA/SS/mcfg_hw.mbn
+mcfg_hw/generic/common/Waipio/STANDALONE/LA/SS_CDMALess/mcfg_hw.mbn

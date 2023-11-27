@@ -1,0 +1,12 @@
+mcfg_sw/generic/d2/global/cmcc/mcfg_sw.mbn
+mcfg_sw/generic/d2/global/ct/mcfg_sw.mbn
+mcfg_sw/generic/d2/global/cu/mcfg_sw.mbn
+mcfg_sw/generic/d2/global/row/mcfg_sw.mbn
+mcfg_sw/generic/d2/global/ytl/mcfg_sw.mbn
+mcfg_sw/generic/d2/global/hwinfo/mcfg_sw.mbn
+mcfg_sw/generic/d2/global/kt/mcfg_sw.mbn
+mcfg_sw/generic/d2/global/skt/mcfg_sw.mbn
+mcfg_sw/generic/d2/global/lgu/mcfg_sw.mbn
+mcfg_sw/generic/d2/global/tta/mcfg_sw.mbn
+mcfg_sw/generic/d2/global/umobile/mcfg_sw.mbn
+mcfg_sw/generic/d2/global/smtfren/mcfg_sw.mbn

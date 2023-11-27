@@ -1,0 +1,9 @@
+*.elf
+*.img
+*.bin
+
+# include nexus 6P img files
+!radio-angler*.img
+
+# include pixel 1 img files
+!radio-sailfish*.img

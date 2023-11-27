@@ -1,0 +1,4 @@
+mcfg_hw/generic/common/Strait/STANDALONE/LA/DSDS/mcfg_hw.mbn
+mcfg_hw/generic/common/Strait/STANDALONE/LA/DSDS_CDMALess/mcfg_hw.mbn
+mcfg_hw/generic/common/Strait/STANDALONE/LA/SS/mcfg_hw.mbn
+mcfg_hw/generic/common/Strait/STANDALONE/LA/SS_CDMALess/mcfg_hw.mbn

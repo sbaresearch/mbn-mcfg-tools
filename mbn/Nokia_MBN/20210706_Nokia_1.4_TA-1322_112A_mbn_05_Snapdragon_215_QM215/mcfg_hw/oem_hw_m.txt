@@ -1,0 +1,3 @@
+mcfg_hw/generic/common/msm8909/la/7+5_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8909/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8909/cmcc_sub/sr_dsds/mcfg_hw.mbn

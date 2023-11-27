@@ -1,0 +1,3 @@
+mcfg_hw/generic/common/sdm439/la/7+7_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm439/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm439/cmcc_sub/sr_dsds/mcfg_hw.mbn
