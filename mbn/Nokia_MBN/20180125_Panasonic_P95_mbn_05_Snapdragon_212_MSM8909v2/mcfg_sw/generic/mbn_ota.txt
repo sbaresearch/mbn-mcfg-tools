@@ -1,0 +1,2 @@
+mcfg_sw/generic/hipad/reliance/mcfg_sw.mbn
+mcfg_sw/generic/hipad/row/mcfg_sw.mbn

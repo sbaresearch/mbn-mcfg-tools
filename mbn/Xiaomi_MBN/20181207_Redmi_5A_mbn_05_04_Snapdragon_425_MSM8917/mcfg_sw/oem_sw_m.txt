@@ -1,0 +1,1 @@
+mcfg_sw/generic/common/row/commerci/mcfg_sw.mbn

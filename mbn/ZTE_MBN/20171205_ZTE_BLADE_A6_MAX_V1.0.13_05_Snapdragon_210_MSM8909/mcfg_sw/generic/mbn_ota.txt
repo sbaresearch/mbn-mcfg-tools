@@ -1,0 +1,1 @@
+mcfg_sw/generic/zte/mexico/telcel/volte/mcfg_sw.mbn

@@ -1,0 +1,15 @@
+mcfg_hw/generic/common/msm8920/la/7+7_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8920/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8920/cmcc_sub/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8940/la/7+7_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8940/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8940/cmcc_sub/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8953/la/7+7_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8953/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8953/cmcc_sub/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm450/la/7+7_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm450/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm450/cmcc_sub/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm632/la/7+7_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm632/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm632/cmcc_sub/sr_dsds/mcfg_hw.mbn

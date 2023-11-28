@@ -1,0 +1,24 @@
+{
+    "Image_Build_IDs": {
+        "adsp": "ADSP.VT.5.4.1-00278-KAMORTA-1", 
+        "apps": "LA.UM.8.15.r1-05900-KAMORTA.0-1", 
+        "boot": "BOOT.XF.4.1-00178-KAMORTALAZ-1", 
+        "btfm": "BTFM.CHE.2.1.5-00254-QCACHROMZ-1", 
+        "btfm_cmc": "BTFM.CMC.1.2.0-00171-QCACHROMZ-1", 
+        "cdsp": "CDSP.VT.2.4.1-00183-KAMORTA-1", 
+        "common": "Kamorta.LA.1.0-00280-STD.PROD-1.327109.0.328384.2", 
+        "glue": "GLUE.KAMORTA_LA.1.0-00740-NOOP_TEST-1", 
+        "modem": "MPSS.HA.1.0-00485.8-KAMORTA_GEN_PACK-2.327109.1.328384.2", 
+        "rpm": "RPM.BF.1.10-00160-KAMORTAAAAAANAZR-1", 
+        "tz": "TZ.XF.5.1-00755-KAMORTAAAAAANAZT-1", 
+        "tz_apps": "TZ.APPS.1.1-00026-KAMORTAAAAAANAZT-1.323773.1", 
+        "video": "VIDEO.VE.6.0-00026-PROD-1", 
+        "wlan": "WLAN.HL.3.2.4-00527-QCAHLSWMTPLZ-1"
+    }, 
+    "Metabuild_Info": {
+        "Meta_Build_ID": "Kamorta.LA.1.0-00280-STD.PROD-1.327109.0.328384.2", 
+        "Product_Flavor": "asic", 
+        "Time_Stamp": "2021-08-04 15:57:57"
+    }, 
+    "Version": "1.0"
+}

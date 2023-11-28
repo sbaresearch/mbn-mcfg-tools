@@ -1,0 +1,6 @@
+mcfg_hw/generic/common/agatti/la/7+7_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/agatti/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/agatti/cmcc_sub/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/kamorta/la/7+7_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/kamorta/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/kamorta/cmcc_sub/sr_dsds/mcfg_hw.mbn

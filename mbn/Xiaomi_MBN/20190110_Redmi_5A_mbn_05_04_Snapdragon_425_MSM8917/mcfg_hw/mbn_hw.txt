@@ -1,0 +1,16 @@
+mcfg_hw/generic/common/msm8909/la/7+1_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8909/la/7+5_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8909/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8909/cmcc_sub/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8917/la/7+1_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8917/la/7+5_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8917/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8917/cmcc_sub/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8937/la/7+1_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8937/la/7+5_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8937/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/msm8937/cmcc_sub/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm439/la/7+1_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm439/la/7+5_mode/sr_dsds/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm439/la/ss/mcfg_hw.mbn
+mcfg_hw/generic/common/sdm439/cmcc_sub/sr_dsds/mcfg_hw.mbn

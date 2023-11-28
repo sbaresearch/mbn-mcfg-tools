@@ -1,0 +1,5 @@
+mcfg_sw/generic/china/cmcc/commerci/volte_op/mcfg_sw.mbn
+mcfg_sw/generic/china/ct/commerci/volte_op/mcfg_sw.mbn
+mcfg_sw/generic/china/cu/commerci/volte/mcfg_sw.mbn
+mcfg_sw/generic/fih/gcf_lab/commerci/mcfg_sw.mbn
+mcfg_sw/generic/na/tmo/commerci/mcfg_sw.mbn

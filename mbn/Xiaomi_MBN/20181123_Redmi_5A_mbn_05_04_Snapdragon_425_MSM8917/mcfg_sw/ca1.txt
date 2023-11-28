@@ -1,0 +1,9 @@
+mcfg_sw/generic/china/cmcc/commerci/volte_op/mcfg_sw.mbn
+mcfg_sw/generic/china/ct/commerci/openmkt/mcfg_sw.mbn
+mcfg_sw/generic/china/cu/commerci/openmkt/mcfg_sw.mbn
+mcfg_sw/generic/common/row/commerci/mcfg_sw.mbn
+mcfg_sw/generic/sea/ytl/commerci/mcfg_sw.mbn
+mcfg_sw/generic/sea/smartfre/commerci/mcfg_sw.mbn
+mcfg_sw/generic/sea/seatel/commerci/mcfg_sw.mbn
+mcfg_sw/generic/sea/poland/commerci/mcfg_sw.mbn
+mcfg_sw/generic/sea/ais/commerci/thailand/mcfg_sw.mbn
