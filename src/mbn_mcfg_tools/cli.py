@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from mbntools.mbn import Mbn
+from mbn_mcfg_tools.mbn import Mbn
 
 def main():
     parser = argparse.ArgumentParser()

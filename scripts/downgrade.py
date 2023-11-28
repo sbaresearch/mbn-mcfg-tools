@@ -3,7 +3,7 @@
 import sys
 import shutil
 
-from mbntools.mbn import Mbn
+from mbn_mcfg_tools.mbn import Mbn
 
 import logging
 

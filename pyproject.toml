@@ -3,14 +3,14 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mbntools"
+name = "mbn-mcfg-tools"
 version = "0.0.1"
 dependencies = [
   "pyelftools"
 ]
 
 [project.scripts]
-extract = "mbntools.cli:main"
+mbn-extract = "mbn_mcfg_tools.cli:main"
 
 [project.optional-dependencies]
 test = [ "pytest" ]

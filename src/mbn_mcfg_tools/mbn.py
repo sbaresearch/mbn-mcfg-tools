@@ -5,18 +5,21 @@ import json
 import struct
 import os
 
+from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO
 
 from elftools.elf.elffile import ELFFile
 from elftools.elf.segments import Segment
-from mbntools.mcfg import MCFG, MCFG_Item
-from mbntools.utils import write_all, get_bytes, pack, unpack
-from mbntools import utils
-from mbntools.mbn_json import MbnJsonEncoder, decode_hook, NvContentEncoder
-from mbntools import items_generated
+from mbn_mcfg_tools.mcfg import MCFG, MCFG_Item
+from mbn_mcfg_tools.utils import write_all, get_bytes, pack, unpack
+from mbn_mcfg_tools import utils
+from mbn_mcfg_tools.mbn_json import MbnJsonEncoder, decode_hook, NvContentEncoder
+from mbn_mcfg_tools import items_generated
+from mbn_mcfg_tools.hash_header import parse_hash_header
 
 logger = logging.getLogger(__name__)
+
 
 class Mbn:
     def __init__(self, stream: BinaryIO, parse_trailer_content=True):
@@ -28,7 +31,9 @@ class Mbn:
     def parse(self):
         self["elf"] = ELFFile(self._stream)
         self._stream.seek(self.get_mcfg_seg()["p_offset"])
-        self["mcfg"] = MCFG(self._stream, parse_trailer_content=self._parse_trailer_content)
+        self["mcfg"] = MCFG(
+            self._stream, parse_trailer_content=self._parse_trailer_content
+        )
         self._parse_mcfg_end()
 
     @staticmethod
@@ -47,7 +52,9 @@ class Mbn:
                 with open(p, "x") as f:
                     write_all(f, c)
             except Exception as e:
-                logger.warn(f"Exception while trying to parse nv item content: {type(e)}: {e}")
+                logger.warn(
+                    f"Exception while trying to parse nv item content: {type(e)}: {e}"
+                )
 
     def extract(self, path):
         encoder = MbnJsonEncoder(extract_meta=True, indent=2)
@@ -67,7 +74,9 @@ class Mbn:
                 free_name = _free_name(name, used_nv_ids)
                 used_nv_ids.add(free_name)
                 nv_items.append(item)
-                Mbn._write_parsed_content(item, utils.join(nv_path, Path(free_name)), NvContentEncoder())
+                Mbn._write_parsed_content(
+                    item, utils.join(nv_path, Path(free_name)), NvContentEncoder()
+                )
                 continue
 
             if item["type"] not in [MCFG_Item.NVFILE_TYPE, MCFG_Item.FILE_TYPE]:
@@ -75,7 +84,7 @@ class Mbn:
                 nv_items.append(item)
                 continue
 
-            filename = Path(item["filename"].strip(b'\x00').decode())
+            filename = Path(item["filename"].strip(b"\x00").decode())
             free_name = _free_name(filename, used_paths)
             used_paths.update(free_name.parents, [free_name])
 
@@ -107,7 +116,7 @@ class Mbn:
             write_all(f, encoder.encode(self["mcfg"]))
         with open(path / "original_file.mbn", "xb") as f:
             self._stream.seek(0)
-            buf = self._stream.read() # TODO: avoid reading everything at once
+            buf = self._stream.read()  # TODO: avoid reading everything at once
             write_all(f, buf)
 
         for item in self["mcfg"]["items"]:
@@ -120,7 +129,12 @@ class Mbn:
     def unextract(exdir, path) -> "Mbn":
         exdir = Path(exdir)
 
-        if not all(map(lambda n: (exdir / n).exists(), ["nv_items", "meta", "original_file.mbn", "files"])):
+        if not all(
+            map(
+                lambda n: (exdir / n).exists(),
+                ["nv_items", "meta", "original_file.mbn", "files"],
+            )
+        ):
             raise Exception("Extracted file is incomplete!")
 
         with open(exdir / "meta", "r") as f:
@@ -140,7 +154,9 @@ class Mbn:
                 continue
 
             fp = _extracted_filename(item)
-            with open(utils.join(exdir / "files", fp), "rb") as f: # TODO error handling
+            with open(
+                utils.join(exdir / "files", fp), "rb"
+            ) as f:  # TODO error handling
                 item["data"] = f.read()
 
             mcfg["items"].append(item)
@@ -157,11 +173,12 @@ class Mbn:
         stream.seek(0)
         mbn = Mbn.__new__(Mbn)
         mbn._values = {
-                "elf": ELFFile(stream),
-                "mcfg": mcfg,
-                }
+            "elf": ELFFile(stream),
+            "mcfg": mcfg,
+        }
         mbn._parse_trailer_content = parse_trailer_content
         mbn._set_stream(stream)
+        mbn.rewrite_hashes()
         return mbn
 
     def get_mcfg_seg(self) -> Segment:
@@ -189,46 +206,41 @@ class Mbn:
         padlen = struct.unpack("<I", end[-4:])[0] - self["mcfg"]["trailer"]._item_len
 
         if padlen <= 0 or padlen >= 5:
-            raise Exception(f"Invalid length of MCFG segment padding: {padlen} (should be in the range [1,4])")
+            raise Exception(
+                f"Invalid length of MCFG segment padding: {padlen} (should be in the range [1,4])"
+            )
         if padlen != diff:
             raise Exception("Padding length is inconsistent with trailer length.")
 
     def rewrite_hashes(self):
         n, hseg = self._get_hash_segment()
-        hash_type = self._get_hash_segment_type(hseg)
-        dig_size = hashlib.new(hash_type.name).digest_size
-        offset = hash_type.hashtable_offset()
-
-        for i, s in enumerate(self["elf"].iter_segments()):
-            if i == n:
-                self._stream.seek(hseg["p_offset"] + offset + i * dig_size)
-                write_all(self._stream, b'\x00' * dig_size)
-                continue
-
-            h = hashlib.new(hash_type.name, s.data())
-            self._stream.seek(hseg["p_offset"] + offset + i * dig_size)
-            write_all(self._stream, h.digest())
-
-    def check_hashes(self) -> bool:
-        n, hseg = self._get_hash_segment()
-        num_segs = self["elf"].num_segments()
-        hash_type = self._get_hash_segment_type(hseg)
-        dig_size = hashlib.new(hash_type.name).digest_size
+        header = parse_hash_header(BytesIO(hseg.data()))
+        dig_size = hashlib.new(header.HASH).digest_size
 
         hashes = []
-        data = hseg.data()[hash_type.hashtable_offset():]
-        for _ in range(num_segs):
-            hashes.append(data[:dig_size])
-            data = data[dig_size:]
+        for i, s in enumerate(self["elf"].iter_segments()):
+            if i == n:
+                hashes.append(b"\x00" * dig_size)
+                continue
 
-        if hashes[n] != b'\x00' * dig_size:
+            hashes.append(hashlib.new(header.HASH, s.data()).digest())
+        header.hashes = hashes
+        self._stream.seek(hseg["p_offset"])
+        header.write(self._stream)
+
+    def check_hashes(self) -> bool:
+        n, hash_seg = self._get_hash_segment()
+        header = parse_hash_header(BytesIO(hash_seg.data()))
+        hashes = header.hashes
+
+        if any(map(lambda i: i != 0, hashes[n])):
             return False
 
         for i, s in enumerate(self["elf"].iter_segments()):
             if i == n:
                 continue
 
-            h = hashlib.new(hash_type.name, s.data())
+            h = hashlib.new(header.HASH, s.data())
 
             if hashes[i] != h.digest():
                 return False
@@ -243,7 +255,12 @@ class Mbn:
             raise Exception("Unknown hash algorithm.")
 
     def _get_hash_segment(self) -> tuple[int, Segment]:
-        mseg = list(filter(lambda x: x[1]["p_flags"] & 0x200000 != 0, enumerate(self["elf"].iter_segments())))
+        mseg = list(
+            filter(
+                lambda x: x[1]["p_flags"] & 0x200000 != 0,
+                enumerate(self["elf"].iter_segments()),
+            )
+        )
 
         if len(mseg) == 0:
             raise Exception("Missing hash segment")
@@ -301,6 +318,7 @@ class Mbn:
     def __contains__(self, k):
         return k in self._values
 
+
 def _free_name(name: Path, used: set[Path]) -> Path:
     n = name
     i = 1
@@ -311,9 +329,11 @@ def _free_name(name: Path, used: set[Path]) -> Path:
 
     return n
 
+
 def _extracted_filename(item: MCFG_Item) -> Path:
     n = item["filename_alias"] if "filename_alias" in item else item["filename"]
-    return Path(n.strip(b'\x00').decode())
+    return Path(n.strip(b"\x00").decode())
+
 
 @enum.unique
 class HashType(enum.Enum):
@@ -324,9 +344,10 @@ class HashType(enum.Enum):
         if self.value == 3:
             return 40
         elif self.value == 6:
-            return 168 # TODO
+            return 168  # TODO
         else:
             raise NotImplementedError
+
 
 def _first_implicit_exception(e: BaseException) -> BaseException:
     while e.__context__ is not None:
