@@ -1,5 +1,8 @@
 # MBN MCFG Tools
 
+**DISCLAIMER**: This tool is still under development and started as a hastily written script because
+we needed something to parse MBN files, so please do not expect a polished tool.
+
 This project provides a python library/application for parsing Qualcomm MBN configuration
 files and the contained configuration items.
 
@@ -34,23 +37,30 @@ Our package provides a CLI tool to pack/unpack MBN files.
 
 To extract the file `row_common.mbn` into the directory `row_common_extracted`:
 ```shell
-mbn-extract -e row_common.mbn row_common_extracted
+mbn-tool -e row_common.mbn row_common_extracted
 ```
 
 To pack the extracted configuration file `row_common_extracted` into the MBN file
 `row_common_packed.mbn`:
 ```shell
-mbn-extract -p row_common.mbn
+mbn-tool -p row_common.mbn
 ```
 
 To check the hashes in the secure boot header for validity:
 ```shell
-mbn-extract -c row_common.mbn
+mbn-tool -c row_common.mbn
 ```
 
 ## Related Repositories
 
-* [EfsTools](https://github.com/JohnBel/EfsTools)
-* [mcfg\_tools](https://github.com/Biktorgj/mcfg_tools)
-* [qtestsign](https://github.com/msm8916-mainline/qtestsign)
+* [EfsTools](https://github.com/JohnBel/EfsTools): console program for accessing the EFS file system
+  of Qualcomm modems
+* [mcfg\_tools](https://github.com/Biktorgj/mcfg_tools): small utilities to unpack and repack EFS
+  item files
+* [qtestsign](https://github.com/msm8916-mainline/qtestsign): simple tool to "sign" ELF Qualcomm
+  firmware images using a dummy certificate chain ("test keys").
+* [mbn\_utils](https://github.com/fenrir-naru/mbn_utils): another tool to pack and unpack MBN MCFG
+  files.
+* [Qualcomm\_tech](https://github.com/Bigcountry907/Qualcomm_tech/tree/0ce596c9bb20a373e616bcb67d2edfb8084cf6d7):
+  Various qualcomm manuals.
 * [msm8909w-law-2-0\_amss\_standard\_oem](https://github.com/ele7enxxh/msm8909w-law-2-0_amss_standard_oem)
