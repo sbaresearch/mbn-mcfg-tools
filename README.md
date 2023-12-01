@@ -29,7 +29,7 @@ The MBN modem configuration file format (or what we assume it to be) can be foun
 
 Our package provides a CLI tool to pack/unpack MBN files.
 
-> [!INFO]
+> [!NOTE]
 > When modifying an extracted MBN file, please note that currently, when changing a value of type
 > "bytes", changes to its "ascii" property are ignored. Furthermore, only changes to the file `meta`
 > and the files in the `files` directory are packed into an MBN file when using our tool to repack a
