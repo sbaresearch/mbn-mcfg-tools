@@ -43,7 +43,7 @@ mbn-tool -e row_common.mbn row_common_extracted
 To pack the extracted configuration file `row_common_extracted` into the MBN file
 `row_common_packed.mbn`:
 ```shell
-mbn-tool -p row_common.mbn
+mbn-tool -p row_common_packed.mbn row_common_extracted
 ```
 
 To check the hashes in the secure boot header for validity:
