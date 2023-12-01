@@ -1,4 +1,3 @@
-import enum
 import hashlib
 import logging
 import json
@@ -12,7 +11,7 @@ from typing import BinaryIO
 from elftools.elf.elffile import ELFFile
 from elftools.elf.segments import Segment
 from mbn_mcfg_tools.mcfg import MCFG, MCFG_Item
-from mbn_mcfg_tools.utils import write_all, get_bytes, pack, unpack
+from mbn_mcfg_tools.utils import write_all, get_bytes, pack
 from mbn_mcfg_tools import utils
 from mbn_mcfg_tools.mbn_json import MbnJsonEncoder, decode_hook, NvContentEncoder
 from mbn_mcfg_tools import items_generated
@@ -37,26 +36,29 @@ class Mbn:
         self._parse_mcfg_end()
 
     @staticmethod
-    def _write_parsed_content(item, p, encoder):
+    def _fmt_parsed_content_or_exception(item, p, encoder) -> None:
         try:
             t = item.parse_item_content()
             if t is not None:
                 c = json.dumps(t, indent=2, default=encoder.default)
             else:
-                c = None
+                c = ""
         except items_generated.NvContentParseError as e:
             c = f"Exception: {repr(_first_implicit_exception(e))}\n"
             c += json.dumps(e.partial, indent=2, default=encoder.default)
-        if c is not None:
-            try:
-                with open(p, "x") as f:
-                    write_all(f, c)
-            except Exception as e:
-                logger.warn(
-                    f"Exception while trying to parse nv item content: {type(e)}: {e}"
-                )
+        try:
+            with open(p, "x") as f:
+                write_all(f, c)
+        except Exception as e:
+            logger.warn(
+                f"Exception while trying to parse nv item content: {type(e)}: {e}"
+            )
 
     def extract(self, path):
+        """Extract configuration from an MBN file.
+
+        :param path: Where the contents of the MBN file should be extracted to.
+        """
         encoder = MbnJsonEncoder(extract_meta=True, indent=2)
 
         nv_items = []
@@ -74,7 +76,7 @@ class Mbn:
                 free_name = _free_name(name, used_nv_ids)
                 used_nv_ids.add(free_name)
                 nv_items.append(item)
-                Mbn._write_parsed_content(
+                Mbn._fmt_parsed_content_or_exception(
                     item, utils.join(nv_path, Path(free_name)), NvContentEncoder()
                 )
                 continue
@@ -106,7 +108,7 @@ class Mbn:
 
             p = utils.join(nv_files_path, filename)
             p.parent.mkdir(parents=True, exist_ok=True)
-            Mbn._write_parsed_content(item, p, NvContentEncoder())
+            Mbn._fmt_parsed_content_or_exception(item, p, NvContentEncoder())
 
             nv_items.append(item)
 
@@ -116,17 +118,22 @@ class Mbn:
             write_all(f, encoder.encode(self["mcfg"]))
         with open(path / "original_file.mbn", "xb") as f:
             self._stream.seek(0)
-            buf = self._stream.read()  # TODO: avoid reading everything at once
+            buf = self._stream.read()
             write_all(f, buf)
 
         for item in self["mcfg"]["items"]:
             try:
                 del item._header["filename_alias"]
-            except:
+            except KeyError:
                 pass
 
     @staticmethod
-    def unextract(exdir, path) -> "Mbn":
+    def pack(exdir, path) -> "Mbn":
+        """Pack extracted configuration into an MBN file.
+
+        :param exdir: directory containing the extracted configuration.
+        :param path: The path of the MBN file to be created.
+        """
         exdir = Path(exdir)
 
         if not all(
@@ -154,17 +161,15 @@ class Mbn:
                 continue
 
             fp = _extracted_filename(item)
-            with open(
-                utils.join(exdir / "files", fp), "rb"
-            ) as f:  # TODO error handling
+            with open(utils.join(exdir / "files", fp), "rb") as f:
                 item["data"] = f.read()
 
             mcfg["items"].append(item)
 
         for item in mcfg["items"]:
             try:
-                del item["filename_alias"]
-            except:
+                del item._header["filename_alias"]
+            except KeyError:
                 pass
 
         stream = open(path, "w+b")
@@ -177,7 +182,7 @@ class Mbn:
             "mcfg": mcfg,
         }
         mbn._parse_trailer_content = parse_trailer_content
-        mbn._set_stream(stream)
+        mbn.set_stream(stream)
         mbn.rewrite_hashes()
         return mbn
 
@@ -213,6 +218,9 @@ class Mbn:
             raise Exception("Padding length is inconsistent with trailer length.")
 
     def rewrite_hashes(self):
+        """Updates the hashes in the MBN hash segment.
+        Does NOT touch the signature in the hash segment.
+        """
         n, hseg = self._get_hash_segment()
         header = parse_hash_header(BytesIO(hseg.data()))
         dig_size = hashlib.new(header.HASH).digest_size
@@ -229,6 +237,7 @@ class Mbn:
         header.write(self._stream)
 
     def check_hashes(self) -> bool:
+        """Validates the hashes in the hash segment of the MBN file."""
         n, hash_seg = self._get_hash_segment()
         header = parse_hash_header(BytesIO(hash_seg.data()))
         hashes = header.hashes
@@ -246,13 +255,6 @@ class Mbn:
                 return False
 
         return True
-
-    def _get_hash_segment_type(self, seg: Segment) -> "HashType":
-        self._stream.seek(seg["p_offset"] + 4)
-        try:
-            return HashType(unpack("<I", self._stream)[0])
-        except ValueError:
-            raise Exception("Unknown hash algorithm.")
 
     def _get_hash_segment(self) -> tuple[int, Segment]:
         mseg = list(
@@ -275,8 +277,10 @@ class Mbn:
         pack("<I", self._stream, self["mcfg"]["trailer"]._item_len + padding_len)
 
     def write(self):
+        """Rewrite the parsed MBN file."""
+
         if self["elf"].num_segments() != 3:
-            raise NotImplementedError
+            raise NotImplementedError("MBN file should contain 3 ELF segments.")
 
         self._stream.seek(self["elf"].get_segment(2)["p_offset"])
         start = self._stream.tell()
@@ -302,11 +306,13 @@ class Mbn:
         pack(endianness + 2 * sizefmt, self._stream, size, size)
 
     def close(self):
+        """Calls `close` on the associated stream."""
         self._stream.close()
 
-    def _set_stream(self, stream):
+    def set_stream(self, stream):
+        """Set the stream used for parsing and writing to `stream`."""
         self._stream = stream
-        self["mcfg"]._set_stream(stream)
+        self["mcfg"].set_stream(stream)
         self["elf"] = ELFFile(stream)
 
     def __getitem__(self, k):
@@ -333,20 +339,6 @@ def _free_name(name: Path, used: set[Path]) -> Path:
 def _extracted_filename(item: MCFG_Item) -> Path:
     n = item["filename_alias"] if "filename_alias" in item else item["filename"]
     return Path(n.strip(b"\x00").decode())
-
-
-@enum.unique
-class HashType(enum.Enum):
-    sha256 = 3
-    sha384 = 6
-
-    def hashtable_offset(self) -> int:
-        if self.value == 3:
-            return 40
-        elif self.value == 6:
-            return 168  # TODO
-        else:
-            raise NotImplementedError
 
 
 def _first_implicit_exception(e: BaseException) -> BaseException:

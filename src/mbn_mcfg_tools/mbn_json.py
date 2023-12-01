@@ -5,15 +5,22 @@ import mbn_mcfg_tools.items_generated
 
 from mbn_mcfg_tools.mcfg import MCFG, MCFG_Item, MCFG_Trailer, MnoId
 
-generated_classes = set([t for t in mbn_mcfg_tools.items_generated.__dict__.values() if isinstance(t, type) and not isinstance(t, enum.Enum)])
+generated_classes = set(
+    [
+        t
+        for t in mbn_mcfg_tools.items_generated.__dict__.values()
+        if isinstance(t, type) and not isinstance(t, enum.Enum)
+    ]
+)
+
 
 class NvContentEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, bytes):
             r = {
-                "hex": o.hex(' ', -1),
-                "ascii": o.decode("ascii", errors="replace").replace('\ufffd', '.'),
-                }
+                "hex": o.hex(" ", -1),
+                "ascii": o.decode("ascii", errors="replace").replace("\ufffd", "."),
+            }
         elif isinstance(o, enum.Enum):
             r = {"name": o.name, "value": o.value}
         elif type(o) in generated_classes:
@@ -35,12 +42,15 @@ class MbnJsonEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, bytes):
             r = {
-                "hex": o.hex(' ', -1),
-                "ascii": o.decode("ascii", errors="replace").replace('\ufffd', '.'),
-                }
+                "hex": o.hex(" ", -1),
+                "ascii": o.decode("ascii", errors="replace").replace("\ufffd", "."),
+            }
         elif isinstance(o, MCFG_Item):
             r = o._header.copy()
-            if self._extract_meta and o["type"] in [MCFG_Item.NVFILE_TYPE, MCFG_Item.FILE_TYPE]:
+            if self._extract_meta and o["type"] in [
+                MCFG_Item.NVFILE_TYPE,
+                MCFG_Item.FILE_TYPE,
+            ]:
                 del r["data"]
         elif isinstance(o, MCFG_Trailer):
             r = o._header
@@ -54,11 +64,12 @@ class MbnJsonEncoder(json.JSONEncoder):
             r = {
                 "mcc": o.mcc,
                 "mnc": o.mnc,
-                }
+            }
         else:
             return super().default(o)
-        r["__type__"] = type(o).__name__ # pyright: ignore
+        r["__type__"] = type(o).__name__  # pyright: ignore
         return r
+
 
 def decode_hook(o):
     if "__type__" not in o:

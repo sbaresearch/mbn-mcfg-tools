@@ -2,7 +2,7 @@ import filecmp
 
 import pytest
 
-from mbntools.mbn import Mbn
+from mbn_mcfg_tools.mbn import Mbn
 
 from .mbns import mbn_paths
 
@@ -16,7 +16,7 @@ def test_extract_roundtrip(tmp_path, fp):
         mbn.extract(exdir)
 
     try:
-        mbn = Mbn.unextract(exdir, tmpf)
+        mbn = Mbn.pack(exdir, tmpf)
         mbn.write()
     finally:
         mbn.close()

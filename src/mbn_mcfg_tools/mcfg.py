@@ -29,10 +29,19 @@ class MCFG_Item:
 
     def parse(self):
         self._offset = self._stream.tell()
-        self.parse_header()
-        self.parse_content()
+        self._parse_header()
+        self._parse_content()
 
     def parse_item_content(self):
+        """Try to parse the content of the configuration item.
+
+        The parsers are generated from the files in
+        https://github.com/JohnBel/EfsTools/tree/master/EfsTools/Items
+
+        DO NOT TRUST THE PARSED CONTENT: The format of the configuration items probably changes
+        between different versions and we do not know which version the parsers target and how
+        correct/complete they are.
+        """
         if len(self["data"]) == 0:
             return None
 
@@ -54,26 +63,28 @@ class MCFG_Item:
                 c._rest = s.read()
                 return c
             else:
-                return None
+                raise NotImplementedError
         except NvContentParseError as e:
-            e.partial._rest = s.read()
+            e.partial._rest = s.read()  # pyright: ignore
             raise e
+        except NotImplementedError:
+            return None
 
-    def parse_header(self):
+    def _parse_header(self):
         self._length, self["type"], self["attributes"], self["reserved"] = unpack(
             "<IBBH", self._stream
         )
 
-    def parse_content(self):
+    def _parse_content(self):
         if self["type"] == self.NV_TYPE:
-            self.parse_nv()
+            self._parse_nv()
         elif self["type"] == self.NVFILE_TYPE or self["type"] == self.FILE_TYPE:
-            self.parse_file()
+            self._parse_file()
         else:
             logger.info(f"Unknown item type: {self['type']}")
             self["data"] = get_bytes(self._stream, self._length - 8)
 
-    def parse_nv(self):
+    def _parse_nv(self):
         self["nv_id"], clen = unpack("<HH", self._stream)
 
         if (clen + 4 + 8) != self._length:
@@ -84,7 +95,7 @@ class MCFG_Item:
         if len(self["data"]) > 0:
             self["data_magic"] = self["data"][0]
 
-    def parse_file(self):
+    def _parse_file(self):
         (magic,) = unpack("<H", self._stream)
 
         if magic != 1:
@@ -108,6 +119,9 @@ class MCFG_Item:
             self["data_magic"] = self["data"][0]
 
     def write(self):
+        """Serializes the configuration item and writes it to the stream
+        starting at the current offset.
+        """
         self._offset = self._stream.tell()
         self._stream.seek(4, os.SEEK_CUR)
         pack(
@@ -168,7 +182,10 @@ class MCFG_Item:
         )
         write_all(self._stream, self["data"])
 
-    def _set_stream(self, stream):
+    def set_stream(self, stream):
+        """Set the stream used for parsing and writing to `stream`.
+        Writing and parsing start at the current offset of `stream`.
+        """
         self._stream = stream
 
     def __getitem__(self, k):
@@ -215,44 +232,44 @@ class MCFG_Trailer:
             raise Exception(f"Invalid reserved field for trailer item: {magic2}")
 
     def _parse_trl_item(self):
-        opcode, l = unpack("<BH", self._stream)
+        opcode, length = unpack("<BH", self._stream)
 
         try:
-            opcode = TrlOpcode(opcode)
+            opcode = TrlItemType(opcode)
         except ValueError:
             logger.debug(
                 f"Unknown trailer opcode {opcode}: "
-                + get_bytes(self._stream, l).hex(" ", 1)
+                + get_bytes(self._stream, length).hex(" ", 1)
             )
             return
 
         assert opcode not in self, "duplicate opcode"
-        if opcode == TrlOpcode.mnoid or opcode == TrlOpcode.iccids:
+        if opcode == TrlItemType.mnoid or opcode == TrlItemType.iccids:
             unknown_field, nids = unpack("<BB", self._stream)
 
             assert (
-                l == nids * 4 + 2
-            ), f"{opcode.name}: {l} != {nids} * 4 + 2 ({nids * 4 + 2})"
+                length == nids * 4 + 2
+            ), f"{opcode.name}: {length} != {nids} * 4 + 2 ({nids * 4 + 2})"
 
             self[opcode.name] = {"ids": [], "unknown_field": unknown_field}
             for _ in range(nids):
-                if opcode == TrlOpcode.mnoid:
+                if opcode == TrlItemType.mnoid:
                     mcc, mnc = unpack("<HH", self._stream)
 
-                    if opcode == TrlOpcode.mnoid:
+                    if opcode == TrlItemType.mnoid:
                         self[opcode.name]["ids"].append(MnoId(mcc, mnc))
                     else:
                         self[opcode.name]["ids"].append((mcc, mnc))
                 else:
                     self[opcode.name]["ids"].append(unpack("<I", self._stream)[0])
         else:
-            self[opcode.name] = get_bytes(self._stream, l)
+            self[opcode.name] = get_bytes(self._stream, length)
 
-        if opcode == TrlOpcode.start and self[opcode.name] != b"\x00\x01":
+        if opcode == TrlItemType.start and self[opcode.name] != b"\x00\x01":
             logger.warn(f"TRL op 00 {self[opcode.name]} != b'\\x00\\x01'")
         elif (
-            opcode == TrlOpcode.version2
-            and self[opcode.name] != self[TrlOpcode.version1.name]
+            opcode == TrlItemType.version2
+            and self[opcode.name] != self[TrlItemType.version1.name]
         ):
             logger.info("MCFG Trailer contains two differing versions")
 
@@ -277,6 +294,8 @@ class MCFG_Trailer:
         get_bytes(self._stream, missing)
 
     def write(self):
+        """Serializes the configuration and writes it to the stream starting at the current offset.
+        """
         self._write_header()
 
         if self._parse_trailer_content:
@@ -290,11 +309,11 @@ class MCFG_Trailer:
             write_all(self._stream, self["data"])
 
     def _write_trl_items(self):
-        for c in TrlOpcode:
+        for c in TrlItemType:
             if c.name not in self:
                 continue
 
-            if c == TrlOpcode.mnoid or c == TrlOpcode.iccids:
+            if c == TrlItemType.mnoid or c == TrlItemType.iccids:
                 pack("<BH", self._stream, c.value, len(self[c.name]["ids"]) * 4 + 2)
                 pack(
                     "<BB",
@@ -303,7 +322,7 @@ class MCFG_Trailer:
                     len(self[c.name]["ids"]),
                 )
                 for o in self[c.name]["ids"]:
-                    if c == TrlOpcode.mnoid:
+                    if c == TrlItemType.mnoid:
                         pack("<HH", self._stream, o.mcc, o.mnc)
                     else:
                         pack("<I", self._stream, o)
@@ -327,19 +346,22 @@ class MCFG_Trailer:
         if not self._parse_trailer_content:
             return 10 + len(self["data"])
 
-        l = 20
-        for c in TrlOpcode:
+        length = 20
+        for c in TrlItemType:
             if c.name not in self:
                 continue
 
-            if c == TrlOpcode.mnoid or c == TrlOpcode.iccids:
-                l += len(self[c.name]["ids"]) * 4 + 5
+            if c == TrlItemType.mnoid or c == TrlItemType.iccids:
+                length += len(self[c.name]["ids"]) * 4 + 5
                 continue
-            l += len(self[c.name]) + 3
-        l += 4  # padding
-        return l
+            length += len(self[c.name]) + 3
+        length += 4  # padding
+        return length
 
-    def _set_stream(self, stream):
+    def set_stream(self, stream):
+        """Set the stream used for parsing and writing to `stream`.
+        Writing and parsing start at the current offset of `stream`.
+        """
         self._stream = stream
 
     def __getitem__(self, k):
@@ -377,7 +399,7 @@ class MCFG:
         if magic != b"MCFG":
             raise Exception(f"Invalid Magic value: {magic} should be b'MCFG'")
 
-        # reserved: spare_crc
+        # reserved: spare_crc? TODO
         (
             self["format_type"],
             self["configuration_type"],
@@ -412,30 +434,40 @@ class MCFG:
         )
 
     def remove_filename(self, name: bytes) -> None:
+        """Removes configuration files by their path."""
+
         self["items"] = list(
             filter(
                 lambda i: "filename" not in i
                 or i["filename"].strip(b"\x00") != name.strip(b"\x00"),
                 self["items"],
             )
-        )  # pyright: ignore [reportGeneralTypeIssues]
+        )
 
     def remove_nv_id(self, nvid: int) -> None:
+        """Removes configuration items of type NV by their id."""
+
         self["items"] = list(
             filter(lambda i: "nv_id" not in i or i["nv_id"] != nvid, self["items"])
-        )  # pyright: ignore [reportGeneralTypeIssues]
+        )
 
     def filenames(self) -> Generator[bytes, None, None]:
+        """Returns the names of all configuration files."""
+
         for i in self["items"]:
             if "filename" in i:
                 yield i["filename"].strip(b"\x00")
 
     def nv_ids(self) -> Generator[int, None, None]:
+        """Returns the ids of all nv configuration items."""
+
         for i in self["items"]:
             if "nv_id" in i:
                 yield i["nv_id"]
 
     def get_file_items(self, name: bytes) -> list[MCFG_Item]:
+        """Returns a list of all file configuration items."""
+
         return list(
             filter(
                 lambda i: "filename" in i
@@ -445,13 +477,15 @@ class MCFG:
         )
 
     def get_nv_items(self, nvid: int) -> list[MCFG_Item]:
+        """Returns a list of all nv configuration items."""
+
         return list(
             filter(lambda i: "nv_id" in i and nvid == i["nv_id"], self["items"])
         )
 
     def _find_filepath(self, path: bytes) -> list[MCFG_Item]:
         def cmp_path(x, y):
-            if not "filename" in x:
+            if "filename" not in x:
                 return False
 
             t = x["filename_alias"] if "filename_alias" in x else x["filename"]
@@ -460,6 +494,8 @@ class MCFG:
         return list(filter(lambda x: cmp_path(x, path), self["items"]))
 
     def write(self):
+        """Serializes the configuration and writes it to the stream starting at the current offset.
+        """
         self._offset = self._stream.tell()
         self._write_header()
         for item in self["items"]:
@@ -488,11 +524,14 @@ class MCFG:
         )
         write_all(self._stream, self["version"])
 
-    def _set_stream(self, stream):
+    def set_stream(self, stream):
+        """Set the stream used for parsing and writing to `stream`.
+        Writing and parsing start at the current offset of `stream`.
+        """
         self._stream = stream
         for i in self["items"]:
-            i._set_stream(stream)
-        self["trailer"]._set_stream(stream)
+            i.set_stream(stream)
+        self["trailer"].set_stream(stream)
 
     def __getitem__(self, k):
         return self._header[k]
@@ -517,10 +556,10 @@ class MnoId:
 
 
 @enum.unique
-class TrlOpcode(enum.Enum):
+class TrlItemType(enum.Enum):
     start = 0
     version1 = 1
-    unknown1 = 2  # APPLICABLE_MCC_MNC (https://github.com/Biktorgj/mcfg_tools/blob/e1293b557ec58e535522f151f765f757d9f93af5/mcfg.h#L250C3-L250C41)
+    applicable_mcc_mnc = 2
     operator = 3
     iccids = 4
     version2 = 5

@@ -3,7 +3,7 @@ import shutil
 
 import pytest
 
-from mbntools.mbn import Mbn
+from mbn_mcfg_tools.mbn import Mbn
 
 from .mbns import mbn_paths
 

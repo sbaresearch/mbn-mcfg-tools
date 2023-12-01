@@ -6,13 +6,45 @@ import sys
 
 from mbn_mcfg_tools.mbn import Mbn
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--check")
-    parser.add_argument("-e", "--extract")
-    parser.add_argument("-p", "--pack")
-    parser.add_argument("-t", "--no-parse-trailer", action="store_false", dest="parse_trailer")
-    parser.add_argument("extraction_dir", nargs="?")
+    parser.add_argument(
+        "-c",
+        "--check",
+        metavar="FILE",
+        help="Check the hashes in the secure boot header. "
+        "Does NOT check the signature.",
+    )
+    parser.add_argument(
+        "-e",
+        "--extract",
+        metavar="FILE",
+        help="Extract configuration to [extraction_dir].",
+    )
+    parser.add_argument(
+        "-p",
+        "--pack",
+        metavar="FILE",
+        help="Pack configuration in [extraction_dir] into %(metavar)s.",
+    )
+    parser.add_argument(
+        "-t",
+        "--no-parse-trailer",
+        action="store_false",
+        dest="parse_trailer",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "extraction_dir",
+        nargs="?",
+        help="Directory that configuration should be extracted to or read from. "
+        "Defaults to the filename given by either --extract or --pack with the suffix '_extracted'."
+    )
 
     args = parser.parse_args()
 
@@ -38,9 +70,9 @@ def main():
             print(f"Checking hashes in file {args.check}...", file=sys.stderr, end="")
             mbn = Mbn(f)
             if mbn.check_hashes():
-                print(f" passed", file=sys.stderr)
+                print(" passed", file=sys.stderr)
             else:
-                print(f" failed", file=sys.stderr)
+                print(" failed", file=sys.stderr)
 
 
 def extract(path, exdir, parse_trailer):
@@ -48,11 +80,13 @@ def extract(path, exdir, parse_trailer):
         mbn = Mbn(f, parse_trailer_content=parse_trailer)
         mbn.extract(exdir)
 
+
 def pack(exdir, path):
-    mbn = Mbn.unextract(exdir, path)
+    mbn = Mbn.pack(exdir, path)
     mbn.write()
     mbn.rewrite_hashes()
     mbn._stream.close()
+
 
 if __name__ == "__main__":
     main()

@@ -95,7 +95,7 @@ def main():
             [nv for n in default_nvs for nv in mcfg.get_nv_items(n)]
         )
 
-        mbn._set_stream(f)
+        mbn.set_stream(f)
         mbn.write()
         mbn.rewrite_hashes()
 

@@ -4,7 +4,8 @@ from typing import BinaryIO
 
 from mbn_mcfg_tools.utils import unpack, pack
 
-# format from https://github.com/msm8916-mainline/qtestsign/blob/9ed0787b76b911b346b6dcd0b94093fcf53ff91f/fw/hashseg.py
+# format from
+# https://github.com/msm8916-mainline/qtestsign/blob/9ed0787b76b911b346b6dcd0b94093fcf53ff91f/fw/hashseg.py
 
 
 class HashSegHeader:
@@ -20,20 +21,24 @@ class HashSegHeader:
         offset = getattr(self, "metadata_size_qcom", 0) + getattr(
             self, "metadata_size", 0
         )
-        hash_table = self._data[offset : offset + self.hash_size]
+        hash_table = self._data[offset:offset + self.hash_size]
         assert self.hash_size % digest_size == 0
 
         hashes = []
         for i in range(self.hash_size // digest_size):
-            hashes.append(hash_table[i * digest_size : (i + 1) * digest_size])
+            hashes.append(hash_table[i * digest_size:(i + 1) * digest_size])
         return hashes
 
     @hashes.setter
     def hashes(self, value: list[bytes]) -> None:
         digest_size = hashlib.new(self.HASH).digest_size
 
-        if len(value) * digest_size != self.hash_size:
-            raise NotImplementedError  # TODO
+        if len(value) * digest_size != self.hash_size or not all(
+            map(lambda x: len(x) == digest_size, value)
+        ):
+            raise Exception(
+                "Expected {self.hash_size // digest_size} hashes of length {digest_size}."
+            )
 
         offset = getattr(self, "metadata_size_qcom", 0) + getattr(
             self, "metadata_size", 0
@@ -41,7 +46,7 @@ class HashSegHeader:
         self._data = (
             self._data[:offset]
             + b"".join(value)
-            + self._data[offset + self.hash_size :]
+            + self._data[offset + self.hash_size:]
         )
 
     def write(self, _: BinaryIO) -> None:

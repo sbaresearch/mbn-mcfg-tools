@@ -10,10 +10,9 @@ dependencies = [
 ]
 
 [project.scripts]
-mbn-extract = "mbn_mcfg_tools.cli:main"
+mbn-tool = "mbn_mcfg_tools.cli:main"
 
 [project.optional-dependencies]
-test = [ "pytest" ]
 color = [ "colorama" ]
 
 [tools.pytest.ini_options]
