@@ -1,0 +1,6 @@
+mcfg_hw/generic/common/Kailua/STANDALONE/LA/DSDA_Hybrid/mcfg_hw.mbn
+mcfg_hw/generic/common/Kailua/STANDALONE/LA/DSDA_Hybrid_CDMALess/mcfg_hw.mbn
+mcfg_hw/generic/common/Kailua/STANDALONE/LA/DSDS/mcfg_hw.mbn
+mcfg_hw/generic/common/Kailua/STANDALONE/LA/DSDS_CDMALess/mcfg_hw.mbn
+mcfg_hw/generic/common/Kailua/STANDALONE/LA/SS/mcfg_hw.mbn
+mcfg_hw/generic/common/Kailua/STANDALONE/LA/SS_CDMALess/mcfg_hw.mbn

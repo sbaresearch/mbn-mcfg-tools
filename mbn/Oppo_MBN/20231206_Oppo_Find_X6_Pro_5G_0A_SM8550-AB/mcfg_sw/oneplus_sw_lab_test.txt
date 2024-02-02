@@ -1,0 +1,8 @@
+mcfg_sw/generic/China/CT/Commercial/VoLTE_OpenMkt/mcfg_sw.mbn
+mcfg_sw/generic/China/CT/Lab/CTA/mcfg_sw.mbn
+mcfg_sw/generic/China/CT/Lab/EPS_Only_VoLTE_Conf/mcfg_sw.mbn
+mcfg_sw/generic/China/CT/Lab/NoAPN_Vo_Conf/mcfg_sw.mbn
+mcfg_sw/generic/China/CT/Lab/TEST/mcfg_sw.mbn
+mcfg_sw/generic/China/CT/Lab/TEST_EPS_ONLY/mcfg_sw.mbn
+mcfg_sw/generic/China/CT/Lab/TEST_NO_APN/mcfg_sw.mbn
+mcfg_sw/generic/China/CT/Lab/VoLTE_Conf/mcfg_sw.mbn

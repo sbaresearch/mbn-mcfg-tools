@@ -1,0 +1,10 @@
+mcfg_sw/generic/China/CMCC/Commercial/Volte_OpenMkt/mcfg_sw.mbn
+mcfg_sw/generic/China/CMCC/Lab/AGNSS_LocTech/mcfg_sw.mbn
+mcfg_sw/generic/China/CMCC/Lab/Conf_VoLTE/mcfg_sw.mbn
+mcfg_sw/generic/China/CMCC/Lab/EPS_Only/mcfg_sw.mbn
+mcfg_sw/generic/China/CMCC/Lab/LPP_LocTech/mcfg_sw.mbn
+mcfg_sw/generic/China/CMCC/Lab/Nsiot_VoLTE/mcfg_sw.mbn
+mcfg_sw/generic/China/CMCC/Lab/RRLP_LocTech/mcfg_sw.mbn
+mcfg_sw/generic/China/CMCC/Lab/TGL_Comb_Attach/mcfg_sw.mbn
+mcfg_sw/generic/China/CMCC/Lab/W_IRAT_Comb_Attach/mcfg_sw.mbn
+mcfg_sw/generic/China/CMCC/Lab/OPPO_Nsiot_VoLTE/mcfg_sw.mbn

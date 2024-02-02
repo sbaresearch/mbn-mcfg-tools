@@ -1,0 +1,3 @@
+mcfg_sw/generic/AUNZ/Vodafone/Commercial/mcfg_sw.mbn
+mcfg_sw/generic/AUNZ/Optus/Commercial/AU/mcfg_sw.mbn
+mcfg_sw/generic/AUNZ/Telstra/Commercial/mcfg_sw.mbn

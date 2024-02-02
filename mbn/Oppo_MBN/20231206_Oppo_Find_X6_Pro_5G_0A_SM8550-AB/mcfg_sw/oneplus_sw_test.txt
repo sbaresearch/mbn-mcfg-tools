@@ -1,0 +1,8 @@
+mcfg_sw/generic/SEA/Smartfren/Commercial/mcfg_sw.mbn
+mcfg_sw/generic/SEA/FarEastOne/Commercial/mcfg_sw.mbn
+mcfg_sw/generic/SEA/APT/Commercial/mcfg_sw.mbn
+mcfg_sw/generic/SEA/TM/Commercial/mcfg_sw.mbn
+mcfg_sw/generic/SEA/ChunghwaTel/Commercial/TW/mcfg_sw.mbn
+mcfg_sw/generic/SEA/TStar/Commercial/TW/mcfg_sw.mbn
+mcfg_sw/generic/SEA/Singtel/Commercial/Singapore/mcfg_sw.mbn
+mcfg_sw/generic/SEA/StarHub/Commercial/SG/mcfg_sw.mbn
