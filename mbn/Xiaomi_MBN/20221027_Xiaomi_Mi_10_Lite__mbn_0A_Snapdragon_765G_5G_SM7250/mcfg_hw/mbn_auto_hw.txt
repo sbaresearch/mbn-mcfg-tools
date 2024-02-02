@@ -1,0 +1,1 @@
+mcfg_hw/generic/common/Saipan/STANDALONE/LA/DSDS/mcfg_hw.mbn
