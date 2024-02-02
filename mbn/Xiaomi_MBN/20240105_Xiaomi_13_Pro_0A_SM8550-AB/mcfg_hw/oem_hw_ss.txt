@@ -1,0 +1,1 @@
+mcfg_hw/generic/common/Kailua/STANDALONE/LA/SS/mcfg_hw.mbn
