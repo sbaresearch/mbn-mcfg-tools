@@ -25,6 +25,15 @@ boot header and ignored wrong/missing signatures for MBN MCFG files.
 
 The MBN modem configuration file format (or what we assume it to be) can be found [here](FORMAT.md).
 
+## Installation
+
+To install the mbn-tool:
+```
+python3 -m venv <venvname>
+source <venvname>/bin/activate
+pip install .
+```
+
 ## Usage
 
 Our package provides a CLI tool to pack/unpack MBN files.
@@ -49,6 +58,11 @@ mbn-tool -p row_common_packed.mbn row_common_extracted
 To check the hashes in the secure boot header for validity:
 ```shell
 mbn-tool -c row_common.mbn
+```
+
+To extract all MBN files inside a sample folder (e.g. bash):
+```
+folder="mbn/Google_MBN/20231105/20231105_Google_Pixel_5_mbn_0A_Snapdragon_765G_5G_SM7250/mcfg_sw"; for i in $(find "$folder" | grep ".mbn$"); do mbn-tool -e "${i}" "${i}_extracted"; done
 ```
 
 ## Related Repositories
