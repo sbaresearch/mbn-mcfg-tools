@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mbn-mcfg-tools"
 version = "0.0.1"
-requires-python = "~=3.11"
+requires-python = "~=3.10"
 dependencies = [
   "pyelftools"
 ]
